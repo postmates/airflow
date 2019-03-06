@@ -150,6 +150,9 @@ class KubeConfig:
         # NOTE: We use dag configmaps mounted to containers to make deploys simple
         self.dags_configmap = conf.get(self.kubernetes_section, 'dags_configmap')
 
+        # NOTE: similar to configmaps, we need all the other relevant files
+        self.lib_configmap = conf.get(self.kubernetes_section, 'lib_configmap')
+
         # NOTE: `git_repo` and `git_branch` must be specified together as a pair
         # The http URL of the git repository to clone from
         self.git_repo = conf.get(self.kubernetes_section, 'git_repo')
