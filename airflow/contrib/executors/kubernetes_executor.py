@@ -116,6 +116,7 @@ class KubernetesExecutorConfig:
 class KubeConfig:
     core_section = 'core'
     kubernetes_section = 'kubernetes'
+    kubernetes_lib_section = 'kubernetes_lib'
 
     def __init__(self):
         configuration_dict = configuration.as_dict(display_sensitive=True)
@@ -147,6 +148,7 @@ class KubeConfig:
         # this will set to True if so
         self.dags_in_image = conf.getboolean(self.kubernetes_section, 'dags_in_image')
 
+        self.environment_configmap = conf.get(self.kubernetes_section, 'environment_configmap')
         # NOTE: `git_repo` and `git_branch` must be specified together as a pair
         # The http URL of the git repository to clone from
         self.git_repo = conf.get(self.kubernetes_section, 'git_repo')

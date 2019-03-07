@@ -115,6 +115,12 @@ class WorkerConfiguration(LoggingMixin):
             env['AIRFLOW__CORE__DAGS_FOLDER'] = dag_volume_mount_path
         return env
 
+    def _get_env_from(self, environment):
+        env_from = []
+        if self.kube_config.environment_configmap:
+            env_from.append({"configMapRef": {"name": self.kube_config.environment_configmap}})
+        return env_from
+
     def _get_secrets(self):
         """Defines any necessary secrets for the pod executor"""
         worker_secrets = []
@@ -249,6 +255,7 @@ class WorkerConfiguration(LoggingMixin):
                 'try_number': str(try_number),
             },
             envs=self._get_environment(),
+            envs_from=self._get_env_from(),
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
             image_pull_secrets=self.kube_config.image_pull_secrets,

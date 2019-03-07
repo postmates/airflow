@@ -139,6 +139,8 @@ class KubernetesRequestFactory:
             for secret in env_secrets:
                 KubernetesRequestFactory.add_secret_to_env(env, secret)
             req['spec']['containers'][0]['env'] = env
+        if len(pod.env_from) > 0:
+            req['spec']['containers'][0]['envFrom'] = pod.env_from
 
     @staticmethod
     def extract_resources(pod, req):

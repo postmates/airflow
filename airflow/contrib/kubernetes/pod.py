@@ -45,6 +45,8 @@ class Pod:
     :type image: str
     :param envs: A dict containing the environment variables
     :type envs: dict
+    :param env_from: A dict containing the configmap variables
+    :type env_from: dict
     :param cmds: The command to be run on the pod
     :type cmds: list str
     :param secrets: Secrets to be launched to the pod
@@ -69,6 +71,7 @@ class Pod:
             self,
             image,
             envs,
+            env_from,
             cmds,
             args=None,
             secrets=None,
@@ -91,6 +94,7 @@ class Pod:
     ):
         self.image = image
         self.envs = envs or {}
+        self.env_from = env_from or {}
         self.cmds = cmds
         self.args = args or []
         self.secrets = secrets or []
