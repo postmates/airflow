@@ -24,6 +24,7 @@ from airflow.configuration import conf
 from airflow.contrib.kubernetes.pod import Pod, Resources
 from airflow.contrib.kubernetes.secret import Secret
 from airflow.utils.log.logging_mixin import LoggingMixin
+from collections import defaultdict
 
 
 class WorkerConfiguration(LoggingMixin):
@@ -36,6 +37,7 @@ class WorkerConfiguration(LoggingMixin):
         self.worker_airflow_logs = self.kube_config.base_log_folder
 
         self.dags_volume_name = 'airflow-dags'
+        self.dags_configmap_name = 'dags-configmap'
         self.logs_volume_name = 'airflow-logs'
 
         super(WorkerConfiguration, self).__init__()
@@ -44,7 +46,8 @@ class WorkerConfiguration(LoggingMixin):
         """When using git to retrieve the DAGs, use the GitSync Init Container"""
         # If we're using volume claims to mount the dags, no init container is needed
         if self.kube_config.dags_volume_claim or \
-           self.kube_config.dags_volume_host or self.kube_config.dags_in_image:
+           self.kube_config.dags_volume_host or \
+           self.kube_config.dags_configmap or self.kube_config.dags_in_image:
             return []
 
         # Otherwise, define a git-sync init container
@@ -115,7 +118,7 @@ class WorkerConfiguration(LoggingMixin):
             env['AIRFLOW__CORE__DAGS_FOLDER'] = dag_volume_mount_path
         return env
 
-    def _get_env_from(self, environment):
+    def _get_env_from(self):
         env_from = []
         if self.kube_config.environment_configmap:
             env_from.append({"configMapRef": {"name": self.kube_config.environment_configmap}})
@@ -185,11 +188,27 @@ class WorkerConfiguration(LoggingMixin):
         if self.kube_config.logs_volume_subpath:
             volume_mounts[self.logs_volume_name]['subPath'] = self.kube_config.logs_volume_subpath
 
-        if self.kube_config.dags_in_image:
+        if (self.kube_config.dags_in_image or
+                self.kube_config.dags_configmap):
             del volumes[self.dags_volume_name]
             del volume_mounts[self.dags_volume_name]
 
         # Mount the airflow.cfg file via a configmap the user has specified
+        if self.kube_config.dags_configmap:
+            dags_configmap_name = self.dags_configmap_name
+            dag_path = '{}/dags'.format(self.worker_airflow_home)
+            volumes[dags_configmap_name] = {
+                'name': dags_configmap_name,
+                'configMap': {
+                    'name': self.kube_config.dags_configmap
+                }
+            }
+            volume_mounts[dags_configmap_name] = {
+                'name': dags_configmap_name,
+                'mountPath': dag_path,
+                'readOnly': True
+            }
+
         if self.kube_config.airflow_configmap:
             config_volume_name = 'airflow-config'
             config_path = '{}/airflow.cfg'.format(self.worker_airflow_home)
@@ -205,6 +224,27 @@ class WorkerConfiguration(LoggingMixin):
                 'subPath': 'airflow.cfg',
                 'readOnly': True
             }
+
+        if len(self.kube_config.kubernetes_mounts) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_mounts.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                credential_volume_name = f'{prefix}-secret'
+                config_path = mount_dic[prefix]['path']
+                secret_name = mount_dic[prefix]['secret']
+                volumes[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'secret': {
+                        'secretName': secret_name
+                    }
+                }
+                volume_mounts[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'mountPath': config_path,
+                    'readOnly': True
+                }
 
         return volumes, volume_mounts
 
@@ -238,7 +278,7 @@ class WorkerConfiguration(LoggingMixin):
 
         affinity = kube_executor_config.affinity or self.kube_config.kube_affinity
         tolerations = kube_executor_config.tolerations or self.kube_config.kube_tolerations
-
+        env_from = self._get_env_from()
         return Pod(
             namespace=namespace,
             name=pod_id,
@@ -255,7 +295,7 @@ class WorkerConfiguration(LoggingMixin):
                 'try_number': str(try_number),
             },
             envs=self._get_environment(),
-            envs_from=self._get_env_from(),
+            env_from=env_from,
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
             image_pull_secrets=self.kube_config.image_pull_secrets,

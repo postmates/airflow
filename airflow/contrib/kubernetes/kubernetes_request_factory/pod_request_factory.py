@@ -61,6 +61,7 @@ spec:
         self.extract_affinity(pod, req)
         self.extract_hostnetwork(pod, req)
         self.extract_tolerations(pod, req)
+        print("The finished api request is %s", req)
         return req
 
 

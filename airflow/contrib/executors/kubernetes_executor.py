@@ -116,11 +116,11 @@ class KubernetesExecutorConfig:
 class KubeConfig:
     core_section = 'core'
     kubernetes_section = 'kubernetes'
-    kubernetes_lib_section = 'kubernetes_lib'
 
     def __init__(self):
         configuration_dict = configuration.as_dict(display_sensitive=True)
         self.core_configuration = configuration_dict['core']
+        self.kubernetes_mounts = configuration_dict['kubernetes_mount_section']
         self.kube_secrets = configuration_dict.get('kubernetes_secrets', {})
         self.airflow_home = configuration.get(self.core_section, 'airflow_home')
         self.dags_folder = configuration.get(self.core_section, 'dags_folder')
@@ -148,7 +148,10 @@ class KubeConfig:
         # this will set to True if so
         self.dags_in_image = conf.getboolean(self.kubernetes_section, 'dags_in_image')
 
+        self.dags_configmap = conf.get(self.kubernetes_section, 'dags_configmap')
+
         self.environment_configmap = conf.get(self.kubernetes_section, 'environment_configmap')
+
         # NOTE: `git_repo` and `git_branch` must be specified together as a pair
         # The http URL of the git repository to clone from
         self.git_repo = conf.get(self.kubernetes_section, 'git_repo')
@@ -246,12 +249,14 @@ class KubeConfig:
         if not self.dags_volume_claim \
            and not self.dags_volume_host \
            and not self.dags_in_image \
+           and not self.dags_configmap \
            and (not self.git_repo or not self.git_branch or not self.git_dags_folder_mount_point):
             raise AirflowConfigException(
                 'In kubernetes mode the following must be set in the `kubernetes` '
                 'config section: `dags_volume_claim` '
                 'or `dags_volume_host` '
                 'or `dags_in_image` '
+                'or `dags_configmap` '
                 'or `git_repo and git_branch and git_dags_folder_mount_point`')
 
 
@@ -397,6 +402,7 @@ class AirflowKubernetesScheduler(LoggingMixin):
             execution_date=self._datetime_to_label_safe_datestring(execution_date),
             airflow_command=command, kube_executor_config=kube_executor_config
         )
+        self.log.debug("Kubernetes pod created: %s", pod)
         # the watcher will monitor pods, so we do not block.
         self.launcher.run_pod_async(pod)
         self.log.debug("Kubernetes Job created!")

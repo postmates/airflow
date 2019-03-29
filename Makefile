@@ -2,7 +2,7 @@
 #    Docker
 # ----------------
 IMAGE ?= quay.io/postmates/airflow
-TAG ?= latest-awsannotation-0.5
+TAG ?= 1.10.2
 
 build:
 	docker build -t $(IMAGE):$(TAG) .

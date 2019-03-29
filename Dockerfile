@@ -19,7 +19,7 @@ FROM python:3.6-slim
 COPY . /opt/airflow/
 
 ARG AIRFLOW_HOME=/usr/local/airflow
-ARG AIRFLOW_DEPS="async,crypto,devel,gcp_api,kubernetes,ldap,password,postgres"
+ARG AIRFLOW_DEPS="async,crypto,devel,gcp_api,kubernetes,ldap,password,postgres,s3"
 ARG PYTHON_DEPS=""
 ARG buildDeps="freetds-dev libkrb5-dev libsasl2-dev libssl-dev libffi-dev libpq-dev git"
 ARG APT_DEPS="$buildDeps libsasl2-dev freetds-bin build-essential default-libmysqlclient-dev apt-utils curl rsync netcat locales"
@@ -36,6 +36,4 @@ RUN set -x \
 
 WORKDIR $AIRFLOW_HOME
 RUN mkdir -p $AIRFLOW_HOME
-COPY scripts/docker/entrypoint.sh /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
 CMD ["--help"]
