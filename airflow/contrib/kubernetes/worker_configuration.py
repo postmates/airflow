@@ -288,6 +288,7 @@ class WorkerConfiguration(LoggingMixin):
             cmds=['bash', '-cx', '--'],
             args=[airflow_command],
             labels={
+                'release': self.kube_config.k8s_release,
                 'airflow-worker': worker_uuid,
                 'dag_id': dag_id,
                 'task_id': task_id,

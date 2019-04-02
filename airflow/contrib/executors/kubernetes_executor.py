@@ -152,6 +152,7 @@ class KubeConfig:
 
         self.environment_configmap = conf.get(self.kubernetes_section, 'environment_configmap')
 
+        self.k8s_release = conf.get(self.kubernetes_section, 'k8s_release')
         # NOTE: `git_repo` and `git_branch` must be specified together as a pair
         # The http URL of the git repository to clone from
         self.git_repo = conf.get(self.kubernetes_section, 'git_repo')
