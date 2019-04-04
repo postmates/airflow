@@ -306,7 +306,7 @@ class WorkerConfiguration(LoggingMixin):
                 'try_number': str(try_number),
             },
             envs=self._get_environment(),
-            env_from=self._get_env_from()
+            env_from=self._get_env_from(),
             dynamic_env=self._get_dynamic_env(),
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
