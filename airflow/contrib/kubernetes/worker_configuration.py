@@ -123,7 +123,6 @@ class WorkerConfiguration(LoggingMixin):
         if len(self.kube_config.kubernetes_environment) > 0:
             mount_dic = defaultdict(dict)
             for key, value in self.kube_config.kubernetes_environment.items():
-                env[key.upper()] = os.environ.get(value, "")
                 prefix, suffix = key.split('_')
                 mount_dic[prefix][suffix] = value
             for prefix in mount_dic:
