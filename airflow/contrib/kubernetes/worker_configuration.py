@@ -118,7 +118,7 @@ class WorkerConfiguration(LoggingMixin):
             env['AIRFLOW__CORE__DAGS_FOLDER'] = dag_volume_mount_path
         if len(self.kube_config.kubernetes_environment) > 0:
             for key, value in self.kube_config.kubernetes_environment.items():
-                env[key] = value
+                env[key.upper()] = os.environ.get(value, "")
         return env
 
     def _get_env_from(self):
