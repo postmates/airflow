@@ -120,7 +120,8 @@ class KubeConfig:
     def __init__(self):
         configuration_dict = configuration.as_dict(display_sensitive=True)
         self.core_configuration = configuration_dict['core']
-        self.kubernetes_mounts = configuration_dict['kubernetes_mount_section']
+        self.kubernetes_mounts = configuration_dict['kubernetes_secret_mounts']
+        self.kubernetes_environment = configuration_dict['kubernetes_dynamic_environment']
         self.kube_secrets = configuration_dict.get('kubernetes_secrets', {})
         self.airflow_home = configuration.get(self.core_section, 'airflow_home')
         self.dags_folder = configuration.get(self.core_section, 'dags_folder')
