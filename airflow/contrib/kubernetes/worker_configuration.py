@@ -116,10 +116,19 @@ class WorkerConfiguration(LoggingMixin):
                 self.kube_config.git_subpath     # dags
             )
             env['AIRFLOW__CORE__DAGS_FOLDER'] = dag_volume_mount_path
+        return env
+
+    def _get_dynamic_env(self):
+        dynamic_list = []
         if len(self.kube_config.kubernetes_environment) > 0:
+            mount_dic = defaultdict(dict)
             for key, value in self.kube_config.kubernetes_environment.items():
                 env[key.upper()] = os.environ.get(value, "")
-        return env
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                dynamic_list.append(mount_dic[prefix])
+        return dynamic_list
 
     def _get_env_from(self):
         env_from = []
@@ -281,7 +290,6 @@ class WorkerConfiguration(LoggingMixin):
 
         affinity = kube_executor_config.affinity or self.kube_config.kube_affinity
         tolerations = kube_executor_config.tolerations or self.kube_config.kube_tolerations
-        env_from = self._get_env_from()
         return Pod(
             namespace=namespace,
             name=pod_id,
@@ -299,7 +307,8 @@ class WorkerConfiguration(LoggingMixin):
                 'try_number': str(try_number),
             },
             envs=self._get_environment(),
-            env_from=env_from,
+            env_from=self._get_env_from()
+            dynamic_env=self._get_dynamic_env(),
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
             image_pull_secrets=self.kube_config.image_pull_secrets,
