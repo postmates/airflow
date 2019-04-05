@@ -236,6 +236,27 @@ class WorkerConfiguration(LoggingMixin):
                 'readOnly': True
             }
 
+        if len(self.kube_config.kubernetes_configmaps) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_configmaps.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                configmap_volume_name = f'{prefix}-configmap'
+                config_path = mount_dic[prefix]['path']
+                configmap_name = mount_dic[prefix]['configmap']
+                volumes[configmap_volume_name] = {
+                    'name': configmap_volume_name,
+                    'configMap': {
+                        'name': configmap_name
+                    }
+                }
+                volume_mounts[configmap_volume_name] = {
+                    'name': configmap_volume_name,
+                    'mountPath': config_path,
+                    'readOnly': True
+                }
+
         if len(self.kube_config.kubernetes_mounts) > 0:
             mount_dic = defaultdict(dict)
             for key, value in self.kube_config.kubernetes_mounts.items():
