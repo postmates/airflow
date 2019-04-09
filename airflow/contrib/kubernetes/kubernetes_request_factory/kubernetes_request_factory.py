@@ -58,6 +58,18 @@ class KubernetesRequestFactory:
         })
 
     @staticmethod
+    def add_field_ref_to_env(env, fieldRef):
+        env.append({
+            'name': fieldRef['name'],
+            'valueFrom': {
+                'fieldRef': {
+                    'apiVersion': fieldRef['api'],
+                    'fieldPath': fieldRef['path']
+                }
+            }
+        })
+
+    @staticmethod
     def extract_labels(pod, req):
         req['metadata']['labels'] = req['metadata'].get('labels', {})
         for k, v in six.iteritems(pod.labels):
@@ -131,18 +143,23 @@ class KubernetesRequestFactory:
 
     @staticmethod
     def extract_env_and_secrets(pod, req):
+        dynamic_env = pod.dynamic_env
         envs_from_key_secrets = [
             env for env in pod.secrets if env.deploy_type == 'env' and env.key is not None
         ]
 
-        if len(pod.envs) > 0 or len(envs_from_key_secrets) > 0:
+        if len(pod.envs) > 0 or len(envs_from_key_secrets) > 0 or len(dynamic_env) > 0:
             env = []
             for k in pod.envs.keys():
                 env.append({'name': k, 'value': pod.envs[k]})
+            for fieldRef in dynamic_env:
+                KubernetesRequestFactory.add_field_ref_to_env(env, fieldRef)
             for secret in envs_from_key_secrets:
                 KubernetesRequestFactory.add_secret_to_env(env, secret)
 
             req['spec']['containers'][0]['env'] = env
+        if len(pod.env_from) > 0:
+            req['spec']['containers'][0]['envFrom'] = pod.env_from
 
         KubernetesRequestFactory._apply_env_from(pod, req)
 

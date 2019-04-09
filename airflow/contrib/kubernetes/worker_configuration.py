@@ -22,6 +22,7 @@ from airflow.configuration import conf
 from airflow.contrib.kubernetes.pod import Pod, Resources
 from airflow.contrib.kubernetes.secret import Secret
 from airflow.utils.log.logging_mixin import LoggingMixin
+from collections import defaultdict
 
 
 class WorkerConfiguration(LoggingMixin):
@@ -29,6 +30,7 @@ class WorkerConfiguration(LoggingMixin):
 
     dags_volume_name = 'airflow-dags'
     logs_volume_name = 'airflow-logs'
+    dags_configmap_name = 'dags-configmap'
     git_sync_ssh_secret_volume_name = 'git-sync-ssh-key'
     git_ssh_key_secret_key = 'gitSshKey'
     git_sync_ssh_known_hosts_volume_name = 'git-sync-known-hosts'
@@ -39,14 +41,14 @@ class WorkerConfiguration(LoggingMixin):
         self.worker_airflow_home = self.kube_config.airflow_home
         self.worker_airflow_dags = self.kube_config.dags_folder
         self.worker_airflow_logs = self.kube_config.base_log_folder
-
         super(WorkerConfiguration, self).__init__()
 
     def _get_init_containers(self):
         """When using git to retrieve the DAGs, use the GitSync Init Container"""
         # If we're using volume claims to mount the dags, no init container is needed
         if self.kube_config.dags_volume_claim or \
-           self.kube_config.dags_volume_host or self.kube_config.dags_in_image:
+           self.kube_config.dags_volume_host or \
+           self.kube_config.dags_configmap or self.kube_config.dags_in_image:
             return []
 
         # Otherwise, define a git-sync init container
@@ -161,6 +163,17 @@ class WorkerConfiguration(LoggingMixin):
             return []
         return self.kube_config.env_from_configmap_ref.split(',')
 
+    def _get_dynamic_env(self):
+        dynamic_list = []
+        if len(self.kube_config.kubernetes_environment) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_environment.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                dynamic_list.append(mount_dic[prefix])
+        return dynamic_list
+
     def _get_secrets(self):
         """Defines any necessary secrets for the pod executor"""
         worker_secrets = []
@@ -250,7 +263,8 @@ class WorkerConfiguration(LoggingMixin):
         if self.kube_config.logs_volume_subpath:
             volume_mounts[self.logs_volume_name]['subPath'] = self.kube_config.logs_volume_subpath
 
-        if self.kube_config.dags_in_image:
+        if (self.kube_config.dags_in_image or
+                self.kube_config.dags_configmap):
             del volumes[self.dags_volume_name]
             del volume_mounts[self.dags_volume_name]
 
@@ -278,6 +292,21 @@ class WorkerConfiguration(LoggingMixin):
             }
 
         # Mount the airflow.cfg file via a configmap the user has specified
+        if self.kube_config.dags_configmap:
+            dags_configmap_name = self.dags_configmap_name
+            dag_path = '{}/dags'.format(self.worker_airflow_home)
+            volumes[dags_configmap_name] = {
+                'name': dags_configmap_name,
+                'configMap': {
+                    'name': self.kube_config.dags_configmap
+                }
+            }
+            volume_mounts[dags_configmap_name] = {
+                'name': dags_configmap_name,
+                'mountPath': dag_path,
+                'readOnly': True
+            }
+
         if self.kube_config.airflow_configmap:
             config_volume_name = 'airflow-config'
             config_path = '{}/airflow.cfg'.format(self.worker_airflow_home)
@@ -294,6 +323,48 @@ class WorkerConfiguration(LoggingMixin):
                 'readOnly': True
             }
 
+        if len(self.kube_config.kubernetes_configmaps) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_configmaps.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                configmap_volume_name = f'{prefix}-configmap'
+                config_path = mount_dic[prefix]['path']
+                configmap_name = mount_dic[prefix]['configmap']
+                volumes[configmap_volume_name] = {
+                    'name': configmap_volume_name,
+                    'configMap': {
+                        'name': configmap_name
+                    }
+                }
+                volume_mounts[configmap_volume_name] = {
+                    'name': configmap_volume_name,
+                    'mountPath': config_path,
+                    'readOnly': True
+                }
+
+        if len(self.kube_config.kubernetes_mounts) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_mounts.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                credential_volume_name = f'{prefix}-secret'
+                config_path = mount_dic[prefix]['path']
+                secret_name = mount_dic[prefix]['secret']
+                volumes[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'secret': {
+                        'secretName': secret_name
+                    }
+                }
+                volume_mounts[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'mountPath': config_path,
+                    'readOnly': True
+                }
+
         return volumes, volume_mounts
 
     def generate_dag_volume_mount_path(self):
@@ -304,7 +375,8 @@ class WorkerConfiguration(LoggingMixin):
 
         return dag_volume_mount_path
 
-    def make_pod(self, namespace, worker_uuid, pod_id, dag_id, task_id, execution_date,
+    def make_pod(self, namespace, worker_uuid, pod_id, dag_id, cfg_annotations,
+                 task_id, execution_date,
                  try_number, airflow_command, kube_executor_config):
         volumes_dict, volume_mounts_dict = self._get_volumes_and_mounts()
         worker_init_container_spec = self._get_init_containers()
@@ -318,13 +390,12 @@ class WorkerConfiguration(LoggingMixin):
         annotations = dict(kube_executor_config.annotations) or self.kube_config.kube_annotations
         if gcp_sa_key:
             annotations['iam.cloud.google.com/service-account'] = gcp_sa_key
-
+        annotations.update(cfg_annotations)
         volumes = [value for value in volumes_dict.values()] + kube_executor_config.volumes
         volume_mounts = [value for value in volume_mounts_dict.values()] + kube_executor_config.volume_mounts
 
         affinity = kube_executor_config.affinity or self.kube_config.kube_affinity
         tolerations = kube_executor_config.tolerations or self.kube_config.kube_tolerations
-
         return Pod(
             namespace=namespace,
             name=pod_id,
@@ -333,6 +404,7 @@ class WorkerConfiguration(LoggingMixin):
                                self.kube_config.kube_image_pull_policy),
             cmds=airflow_command,
             labels={
+                'release': self.kube_config.k8s_release,
                 'airflow-worker': worker_uuid,
                 'dag_id': dag_id,
                 'task_id': task_id,
@@ -340,6 +412,8 @@ class WorkerConfiguration(LoggingMixin):
                 'try_number': str(try_number),
             },
             envs=self._get_environment(),
+            env_from=self._get_env_from(),
+            dynamic_env=self._get_dynamic_env(),
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
             image_pull_secrets=self.kube_config.image_pull_secrets,

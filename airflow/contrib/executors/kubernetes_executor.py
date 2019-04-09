@@ -123,6 +123,9 @@ class KubeConfig:
     def __init__(self):
         configuration_dict = configuration.as_dict(display_sensitive=True)
         self.core_configuration = configuration_dict['core']
+        self.kubernetes_mounts = configuration_dict['kubernetes_secret_mounts']
+        self.kubernetes_configmaps = configuration_dict['kubernetes_configmap_mounts']
+        self.kubernetes_environment = configuration_dict['kubernetes_dynamic_environment']
         self.kube_secrets = configuration_dict.get('kubernetes_secrets', {})
         self.kube_env_vars = configuration_dict.get('kubernetes_environment_variables', {})
         self.env_from_configmap_ref = configuration.get(self.kubernetes_section,
@@ -149,6 +152,8 @@ class KubeConfig:
             self.kubernetes_section, 'worker_pods_creation_batch_size')
         self.worker_service_account_name = conf.get(
             self.kubernetes_section, 'worker_service_account_name')
+        self.worker_aws_iam_annotation = conf.get(
+            self.kubernetes_section, 'worker_aws_iam_annotation')
         self.image_pull_secrets = conf.get(self.kubernetes_section, 'image_pull_secrets')
 
         # NOTE: user can build the dags into the docker image directly,
@@ -159,6 +164,11 @@ class KubeConfig:
         self.worker_run_as_user = conf.get(self.kubernetes_section, 'run_as_user')
         self.worker_fs_group = conf.get(self.kubernetes_section, 'fs_group')
 
+        self.dags_configmap = conf.get(self.kubernetes_section, 'dags_configmap')
+
+        self.environment_configmap = conf.get(self.kubernetes_section, 'environment_configmap')
+
+        self.k8s_release = conf.get(self.kubernetes_section, 'k8s_release')
         # NOTE: `git_repo` and `git_branch` must be specified together as a pair
         # The http URL of the git repository to clone from
         self.git_repo = conf.get(self.kubernetes_section, 'git_repo')
@@ -259,12 +269,14 @@ class KubeConfig:
         if not self.dags_volume_claim \
            and not self.dags_volume_host \
            and not self.dags_in_image \
+           and not self.dags_configmap \
            and (not self.git_repo or not self.git_branch or not self.git_dags_folder_mount_point):
             raise AirflowConfigException(
                 'In kubernetes mode the following must be set in the `kubernetes` '
                 'config section: `dags_volume_claim` '
                 'or `dags_volume_host` '
                 'or `dags_in_image` '
+                'or `dags_configmap` '
                 'or `git_repo and git_branch and git_dags_folder_mount_point`')
         if self.git_repo \
            and (self.git_user or self.git_password) \
@@ -405,17 +417,23 @@ class AirflowKubernetesScheduler(LoggingMixin):
         self.log.info('Kubernetes job is %s', str(next_job))
         key, command, kube_executor_config = next_job
         dag_id, task_id, execution_date, try_number = key
+        if self.kube_config.worker_aws_iam_annotation:
+            annotations = {'iam.amazonaws.com/role': self.kube_config.worker_aws_iam_annotation}
+        else:
+            annotations = {}
         self.log.debug("Kubernetes running for command %s", command)
-        self.log.debug("Kubernetes launching image %s", self.kube_config.kube_image)
+        self.log.debug("Kubernetes launching image %s with annotations %s", self.kube_config.kube_image, annotations)
         pod = self.worker_configuration.make_pod(
             namespace=self.namespace, worker_uuid=self.worker_uuid,
             pod_id=self._create_pod_id(dag_id, task_id),
             dag_id=self._make_safe_label_value(dag_id),
             task_id=self._make_safe_label_value(task_id),
             try_number=try_number,
+            cfg_annotations=annotations,
             execution_date=self._datetime_to_label_safe_datestring(execution_date),
             airflow_command=command, kube_executor_config=kube_executor_config
         )
+        self.log.debug("Kubernetes pod created: %s", pod)
         # the watcher will monitor pods, so we do not block.
         self.launcher.run_pod_async(pod)
         self.log.debug("Kubernetes Job created!")
