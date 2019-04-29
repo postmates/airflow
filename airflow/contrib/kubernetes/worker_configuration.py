@@ -214,6 +214,11 @@ class WorkerConfiguration(LoggingMixin):
 
         return security_context
 
+    def _get_labels(self, labels):
+        copy = self.kube_config.kube_labels.copy()
+        copy.update(labels)
+        return copy
+
     def _get_volumes_and_mounts(self):
         def _construct_volume(name, claim, host):
             volume = {
@@ -406,14 +411,13 @@ class WorkerConfiguration(LoggingMixin):
             image_pull_policy=(kube_executor_config.image_pull_policy or
                                self.kube_config.kube_image_pull_policy),
             cmds=airflow_command,
-            labels={
-                'release': self.kube_config.k8s_release,
+            labels=self._get_labels({
                 'airflow-worker': worker_uuid,
                 'dag_id': dag_id,
                 'task_id': task_id,
                 'execution_date': execution_date,
                 'try_number': str(try_number),
-            },
+            }),
             envs=self._get_environment(),
             dynamic_env=self._get_dynamic_env(),
             secrets=self._get_secrets(),
