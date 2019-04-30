@@ -152,8 +152,6 @@ class KubeConfig:
             self.kubernetes_section, 'worker_pods_creation_batch_size')
         self.worker_service_account_name = conf.get(
             self.kubernetes_section, 'worker_service_account_name')
-        self.worker_aws_iam_annotation = conf.get(
-            self.kubernetes_section, 'worker_aws_iam_annotation')
         self.image_pull_secrets = conf.get(self.kubernetes_section, 'image_pull_secrets')
 
         # NOTE: user can build the dags into the docker image directly,
@@ -165,8 +163,6 @@ class KubeConfig:
         self.worker_fs_group = conf.get(self.kubernetes_section, 'fs_group')
 
         self.dags_configmap = conf.get(self.kubernetes_section, 'dags_configmap')
-
-        self.environment_configmap = conf.get(self.kubernetes_section, 'environment_configmap')
 
         self.k8s_release = conf.get(self.kubernetes_section, 'k8s_release')
         # NOTE: `git_repo` and `git_branch` must be specified together as a pair
@@ -417,19 +413,13 @@ class AirflowKubernetesScheduler(LoggingMixin):
         self.log.info('Kubernetes job is %s', str(next_job))
         key, command, kube_executor_config = next_job
         dag_id, task_id, execution_date, try_number = key
-        if self.kube_config.worker_aws_iam_annotation:
-            annotations = {'iam.amazonaws.com/role': self.kube_config.worker_aws_iam_annotation}
-        else:
-            annotations = {}
         self.log.debug("Kubernetes running for command %s", command)
-        self.log.debug("Kubernetes launching image %s with annotations %s", self.kube_config.kube_image, annotations)
         pod = self.worker_configuration.make_pod(
             namespace=self.namespace, worker_uuid=self.worker_uuid,
             pod_id=self._create_pod_id(dag_id, task_id),
             dag_id=self._make_safe_label_value(dag_id),
             task_id=self._make_safe_label_value(task_id),
             try_number=try_number,
-            cfg_annotations=annotations,
             execution_date=self._datetime_to_label_safe_datestring(execution_date),
             airflow_command=command, kube_executor_config=kube_executor_config
         )

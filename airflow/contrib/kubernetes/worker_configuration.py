@@ -375,7 +375,7 @@ class WorkerConfiguration(LoggingMixin):
 
         return dag_volume_mount_path
 
-    def make_pod(self, namespace, worker_uuid, pod_id, dag_id, cfg_annotations,
+    def make_pod(self, namespace, worker_uuid, pod_id, dag_id,
                  task_id, execution_date,
                  try_number, airflow_command, kube_executor_config):
         volumes_dict, volume_mounts_dict = self._get_volumes_and_mounts()
@@ -390,7 +390,6 @@ class WorkerConfiguration(LoggingMixin):
         annotations = dict(kube_executor_config.annotations) or self.kube_config.kube_annotations
         if gcp_sa_key:
             annotations['iam.cloud.google.com/service-account'] = gcp_sa_key
-        annotations.update(cfg_annotations)
         volumes = [value for value in volumes_dict.values()] + kube_executor_config.volumes
         volume_mounts = [value for value in volume_mounts_dict.values()] + kube_executor_config.volume_mounts
 
@@ -412,7 +411,6 @@ class WorkerConfiguration(LoggingMixin):
                 'try_number': str(try_number),
             },
             envs=self._get_environment(),
-            env_from=self._get_env_from(),
             dynamic_env=self._get_dynamic_env(),
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
