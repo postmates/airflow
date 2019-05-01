@@ -489,11 +489,13 @@ class AirflowKubernetesScheduler(LoggingMixin):
         :param random_uuid: a uuid
         :return: ``str`` valid Pod name of appropriate length
         """
-        MAX_POD_ID_LEN = 253
+        MAX_POD_ID_LEN = 50
+        MAX_DAG_ID_LEN = 24
+        MAX_TASK_ID_LEN = 25
 
-        safe_key = safe_dag_id + safe_task_id
+        safe_key = safe_dag_id[:MAX_DAG_ID_LEN] + "-" + safe_task_id[:MAX_TASK_ID_LEN]
 
-        safe_pod_id = safe_key[:MAX_POD_ID_LEN - len(safe_uuid) - 1] + "-" + safe_uuid
+        safe_pod_id = safe_key[:MAX_POD_ID_LEN  - 7] + "-" + safe_uuid[:6]
 
         return safe_pod_id
 
