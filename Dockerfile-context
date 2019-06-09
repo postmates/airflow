@@ -13,8 +13,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
 
-FROM python:3.6-slim
+# We use this small Dockerfile to find out the list of files that are part of the Docker context
+# i.e. ignored by .dockerignore
+# We need it to fix permissions of files checked out by git to help with cache invalidation on different
+# system that have different UMASK. See hooks/build for some detailed explanation.
 
-COPY . /opt/airflow/
-CMD ["--help"]
+FROM alpine:3.9
+
+COPY . /context
