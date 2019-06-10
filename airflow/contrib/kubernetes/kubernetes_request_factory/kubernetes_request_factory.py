@@ -58,13 +58,12 @@ class KubernetesRequestFactory:
         })
 
     @staticmethod
-    def add_field_ref_to_env(env, fieldRef):
+    def add_runtime_info_env(env, runtime_info):
         env.append({
-            'name': fieldRef['name'],
+            'name': runtime_info.name,
             'valueFrom': {
                 'fieldRef': {
-                    'apiVersion': fieldRef['api'],
-                    'fieldPath': fieldRef['path']
+                    'fieldPath': runtime_info.field_path
                 }
             }
         })
@@ -148,7 +147,7 @@ class KubernetesRequestFactory:
             env for env in pod.secrets if env.deploy_type == 'env' and env.key is not None
         ]
 
-        if len(pod.envs) > 0 or len(envs_from_key_secrets) > 0 or len(dynamic_env) > 0:
+        if len(pod.envs) > 0 or len(envs_from_key_secrets) > 0 or len(pod.pod_runtime_info_envs) > 0:
             env = []
             for k in pod.envs.keys():
                 env.append({'name': k, 'value': pod.envs[k]})
@@ -156,6 +155,8 @@ class KubernetesRequestFactory:
                 KubernetesRequestFactory.add_field_ref_to_env(env, fieldRef)
             for secret in envs_from_key_secrets:
                 KubernetesRequestFactory.add_secret_to_env(env, secret)
+            for runtime_info in pod.pod_runtime_info_envs:
+                KubernetesRequestFactory.add_runtime_info_env(env, runtime_info)
 
             req['spec']['containers'][0]['env'] = env
 
