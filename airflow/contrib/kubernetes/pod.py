@@ -38,6 +38,15 @@ class Resources:
         return self.request_cpu is not None or self.request_memory is not None
 
 
+class Port:
+    def __init__(
+            self,
+            name=None,
+            container_port=None):
+        self.name = name
+        self.container_port = container_port
+
+
 class Pod:
     """
     Represents a kubernetes pod and manages execution of a single pod.
@@ -86,6 +95,7 @@ class Pod:
             labels=None,
             node_selectors=None,
             name=None,
+            ports=None,
             volumes=None,
             volume_mounts=None,
             namespace='default',
@@ -112,6 +122,7 @@ class Pod:
         self.result = result
         self.labels = labels or {}
         self.name = name
+        self.ports = ports or []
         self.volumes = volumes or []
         self.volume_mounts = volume_mounts or []
         self.node_selectors = node_selectors or {}
