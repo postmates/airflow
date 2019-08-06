@@ -4,13 +4,21 @@
 IMAGE ?= quay.io/postmates/airflow
 TAG ?= 1.10.3d
 
-build:
+prod-build:
 	docker build -t $(IMAGE):$(TAG) .
 
-push:
+prod-push:
 	docker push $(IMAGE):$(TAG)
+        
+test-build:
+	docker build -t $(IMAGE):$(TAG)-test-image .
+        
+test-push
+        docker push $(IMAGE):$(TAG)-test-image
 
-upgrade: build push
+prod-upgrade: prod-build prod-push
+
+test-image test-build test-push
 
 pull:
 	docker pull $(IMAGE):$(TAG)
