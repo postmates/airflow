@@ -19,7 +19,7 @@ FROM python:3.6-slim
 COPY . /opt/airflow/
 
 ARG AIRFLOW_HOME=/usr/local/airflow
-ARG AIRFLOW_DEPS="async,crypto,devel,gcp_api,kubernetes,ldap,password,postgres,s3,google_auth"
+ARG AIRFLOW_DEPS="async==0.6.2,crypto==1.4.1,devel,gcp_api,kubernetes==10.0.0,python-ldap==3.2.0,password==0.2,postgres==2.2.2,s3=3.0,google_auth=1.6.3"
 ARG PYTHON_DEPS=""
 ARG buildDeps="freetds-dev libkrb5-dev libsasl2-dev libssl-dev libffi-dev libpq-dev git"
 ARG APT_DEPS="$buildDeps libsasl2-dev freetds-bin build-essential default-libmysqlclient-dev apt-utils curl rsync netcat locales"
