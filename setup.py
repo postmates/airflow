@@ -307,7 +307,7 @@ def do_setup():
             'gunicorn>=19.5.0, <20.0',
             'iso8601>=0.1.12',
             'json-merge-patch==0.2',
-            'jinja2>=2.7.3, <=2.10.1',
+            'jinja2>=2.7.3, <=2.10.0',
             'lxml>=4.0.0',
             'markdown>=2.5.2, <3.0',
             'pandas>=0.17.1, <1.0.0',
@@ -326,7 +326,7 @@ def do_setup():
             'thrift>=0.9.2',
             'tzlocal>=1.4',
             'unicodecsv>=0.14.1',
-            'werkzeug>=0.14.1, <=0.15.5',
+            'werkzeug>=0.14.1, <0.15.0',
             'zope.deprecation>=4.0, <5.0',
         ],
         setup_requires=[
