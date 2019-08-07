@@ -2,7 +2,7 @@
 #    Docker
 # ----------------
 IMAGE ?= quay.io/postmates/airflow
-TAG ?= 1.10.3d
+TAG ?=  dev_ali_amiri #  1.10.3d
 
 prod-build:
 	docker build -t $(IMAGE):$(TAG) .
