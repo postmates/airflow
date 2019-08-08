@@ -140,7 +140,10 @@ class WorkerConfiguration(LoggingMixin):
             env[env_var_name] = env_var_val
 
         for env_var_name, env_var_val in six.iteritems(self.kube_config.kubernetes_environment):
-            env[env_var_name.split('_')[1]] = env_var_val
+            env_var_key = env_var_name.split('_')[1]
+            if env_var_key in env.keys():
+                raise Exception('{} already exists in env vars'.format(env_var_key))
+            env[env_var_key] = env_var_val
 
         env["AIRFLOW__CORE__EXECUTOR"] = "LocalExecutor"
 
@@ -289,7 +292,6 @@ class WorkerConfiguration(LoggingMixin):
                 'mode': 0o440
             }
 
-        # Mount the airflow.cfg file via a configmap the user has specified
         if self.kube_config.dags_configmap:
             dags_configmap_name = self.dags_configmap_name
             dag_path = '{}/dags'.format(self.worker_airflow_home)
@@ -305,6 +307,7 @@ class WorkerConfiguration(LoggingMixin):
                 'readOnly': True
             }
 
+        # Mount the airflow.cfg file via a configmap the user has specified
         if self.kube_config.airflow_configmap:
             config_volume_name = 'airflow-config'
             config_path = '{}/airflow.cfg'.format(self.worker_airflow_home)
@@ -342,6 +345,7 @@ class WorkerConfiguration(LoggingMixin):
                     'readOnly': True
                 }
 
+        # do we need both of these? They seem to do the same thing. 
         if len(self.kube_config.kubernetes_mounts) > 0:
             mount_dic = defaultdict(dict)
             for key, value in self.kube_config.kubernetes_mounts.items():
