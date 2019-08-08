@@ -149,7 +149,6 @@ class KubernetesRequestFactory:
 
     @staticmethod
     def extract_env_and_secrets(pod, req):
-        dynamic_env = pod.dynamic_env
         envs_from_key_secrets = [
             env for env in pod.secrets if env.deploy_type == 'env' and env.key is not None
         ]
@@ -158,8 +157,6 @@ class KubernetesRequestFactory:
             env = []
             for k in pod.envs.keys():
                 env.append({'name': k, 'value': pod.envs[k]})
-            for fieldRef in dynamic_env:
-                KubernetesRequestFactory.add_field_ref_to_env(env, fieldRef)
             for secret in envs_from_key_secrets:
                 KubernetesRequestFactory.add_secret_to_env(env, secret)
             for runtime_info in pod.pod_runtime_info_envs:

@@ -56,8 +56,6 @@ class Pod:
     :type image: str
     :param envs: A dict containing the environment variables
     :type envs: dict
-    :param dynamic_env: A list of dictionaries with fieldRef variables
-    :type dynamic_env: list dict
     :param cmds: The command to be run on the pod
     :type cmds: list[str]
     :param secrets: Secrets to be launched to the pod
@@ -92,7 +90,6 @@ class Pod:
             self,
             image,
             envs,
-            dynamic_env,
             cmds,
             args=None,
             secrets=None,
@@ -120,7 +117,6 @@ class Pod:
     ):
         self.image = image
         self.envs = envs or {}
-        self.dynamic_env = dynamic_env or []
         self.cmds = cmds
         self.args = args or []
         self.secrets = secrets or []
