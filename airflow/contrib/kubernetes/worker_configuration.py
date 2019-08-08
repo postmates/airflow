@@ -139,6 +139,9 @@ class WorkerConfiguration(LoggingMixin):
         for env_var_name, env_var_val in six.iteritems(self.kube_config.kube_env_vars):
             env[env_var_name] = env_var_val
 
+        for env_var_name, env_var_val in six.iteritems(self.kube_config.kubernetes_environment):
+            env[env_var_name.split('_')[1]] = env_var_val
+
         env["AIRFLOW__CORE__EXECUTOR"] = "LocalExecutor"
 
         if self.kube_config.airflow_configmap:
@@ -162,17 +165,6 @@ class WorkerConfiguration(LoggingMixin):
         if not self.kube_config.env_from_configmap_ref:
             return []
         return self.kube_config.env_from_configmap_ref.split(',')
-
-    def _get_dynamic_env(self):
-        dynamic_list = []
-        if len(self.kube_config.kubernetes_environment) > 0:
-            mount_dic = defaultdict(dict)
-            for key, value in self.kube_config.kubernetes_environment.items():
-                prefix, suffix = key.split('_')
-                mount_dic[prefix][suffix] = value
-            for prefix in mount_dic:
-                dynamic_list.append(mount_dic[prefix])
-        return dynamic_list
 
     def _get_secrets(self):
         """Defines any necessary secrets for the pod executor"""
@@ -420,7 +412,6 @@ class WorkerConfiguration(LoggingMixin):
                 'try_number': str(try_number),
             }),
             envs=self._get_environment(),
-            dynamic_env=self._get_dynamic_env(),
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
             image_pull_secrets=self.kube_config.image_pull_secrets,
