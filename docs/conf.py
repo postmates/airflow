@@ -50,6 +50,7 @@ autodoc_mock_imports = [
     'cassandra',
     'celery',
     'cloudant',
+    'cryptography',
     'cx_Oracle',
     'datadog',
     'distributed',
@@ -57,6 +58,7 @@ autodoc_mock_imports = [
     'google',
     'google_auth_httplib2',
     'googleapiclient',
+    'grpc',
     'hdfs',
     'httplib2',
     'jaydebeapi',
@@ -120,9 +122,12 @@ extensions = [
     'docroles'
 ]
 
-autodoc_default_flags = ['show-inheritance', 'members']
+autodoc_default_options = {
+    'show-inheritance': True,
+    'members': True
+}
 
-viewcode_import = True
+viewcode_follow_imported_members = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['templates']
@@ -234,6 +239,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'requests': ('http://docs.python-requests.org/en/master/', None),
     'sqlalchemy': ('https://docs.sqlalchemy.org/en/latest/', None),
+    'hdfs': ('https://hdfscli.readthedocs.io/en/latest/', None),
 }
 
 # -- Options for HTML output ----------------------------------------------
@@ -386,7 +392,7 @@ man_pages = [
 texinfo_documents = [(
     'index', 'Airflow', u'Airflow Documentation',
     u'Apache Airflow', 'Airflow',
-    'Airflow is a system to programmaticaly author, schedule and monitor data pipelines.',
+    'Airflow is a system to programmatically author, schedule and monitor data pipelines.',
     'Miscellaneous'
 ), ]
 
@@ -417,13 +423,17 @@ autoapi_template_dir = 'autoapi_templates'
 
 # A list of patterns to ignore when finding files
 autoapi_ignore = [
-    os.path.abspath('../airflow/contrib/operators/s3_to_gcs_transfer_operator.py'),
-    os.path.abspath('../airflow/contrib/operators/gcs_to_gcs_transfer_operator.py'),
-    os.path.abspath('../airflow/contrib/operators/gcs_to_gcs_transfer_operator.py'),
+    # These modules are backcompat shims, don't build docs for them
+    '*/airflow/contrib/operators/s3_to_gcs_transfer_operator.py',
+    '*/airflow/contrib/operators/gcs_to_gcs_transfer_operator.py',
+    '*/airflow/contrib/operators/gcs_to_gcs_transfer_operator.py',
+
+    '*/node_modules/*',
+    '*/migrations/*',
 ]
 # Keep the AutoAPI generated files on the filesystem after the run.
 # Useful for debugging.
-autoapi_keep_files = False
+autoapi_keep_files = True
 
 # Relative path to output the AutoAPI files into. This can also be used to place the generated documentation
 # anywhere in your documentation hierarchy.

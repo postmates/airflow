@@ -16,15 +16,35 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+"""
+This module contains Google BigQuery operators.
+"""
 
 import json
+from typing import Iterable
 
 from airflow.contrib.hooks.bigquery_hook import BigQueryHook
 from airflow.contrib.hooks.gcs_hook import GoogleCloudStorageHook, _parse_gcs_url
-from airflow.models import BaseOperator
+from airflow.exceptions import AirflowException
+from airflow.models.baseoperator import BaseOperator, BaseOperatorLink
+from airflow.models.taskinstance import TaskInstance
 from airflow.utils.decorators import apply_defaults
 
 
+class BigQueryConsoleLink(BaseOperatorLink):
+    """
+    Helper class for constructing BigQuery link.
+    """
+    name = 'BigQuery Console'
+
+    def get_link(self, operator, dttm):
+        ti = TaskInstance(task=operator, execution_date=dttm)
+        job_id = ti.xcom_pull(task_ids=operator.task_id, key='job_id')
+        return 'https://console.cloud.google.com/bigquery?j={job_id}'.format(
+            job_id=job_id) if job_id else ''
+
+
+# pylint: disable=too-many-instance-attributes
 class BigQueryOperator(BaseOperator):
     """
     Executes BigQuery SQL queries in a specific BigQuery database
@@ -116,6 +136,11 @@ class BigQueryOperator(BaseOperator):
     template_ext = ('.sql', )
     ui_color = '#e4f0e8'
 
+    operator_extra_links = (
+        BigQueryConsoleLink(),
+    )
+
+    # pylint: disable=too-many-arguments
     @apply_defaults
     def __init__(self,
                  bql=None,
@@ -190,24 +215,50 @@ class BigQueryOperator(BaseOperator):
             )
             conn = hook.get_conn()
             self.bq_cursor = conn.cursor()
-        self.bq_cursor.run_query(
-            sql=self.sql,
-            destination_dataset_table=self.destination_dataset_table,
-            write_disposition=self.write_disposition,
-            allow_large_results=self.allow_large_results,
-            flatten_results=self.flatten_results,
-            udf_config=self.udf_config,
-            maximum_billing_tier=self.maximum_billing_tier,
-            maximum_bytes_billed=self.maximum_bytes_billed,
-            create_disposition=self.create_disposition,
-            query_params=self.query_params,
-            labels=self.labels,
-            schema_update_options=self.schema_update_options,
-            priority=self.priority,
-            time_partitioning=self.time_partitioning,
-            api_resource_configs=self.api_resource_configs,
-            cluster_fields=self.cluster_fields,
-        )
+        if isinstance(self.sql, str):
+            job_id = self.bq_cursor.run_query(
+                sql=self.sql,
+                destination_dataset_table=self.destination_dataset_table,
+                write_disposition=self.write_disposition,
+                allow_large_results=self.allow_large_results,
+                flatten_results=self.flatten_results,
+                udf_config=self.udf_config,
+                maximum_billing_tier=self.maximum_billing_tier,
+                maximum_bytes_billed=self.maximum_bytes_billed,
+                create_disposition=self.create_disposition,
+                query_params=self.query_params,
+                labels=self.labels,
+                schema_update_options=self.schema_update_options,
+                priority=self.priority,
+                time_partitioning=self.time_partitioning,
+                api_resource_configs=self.api_resource_configs,
+                cluster_fields=self.cluster_fields,
+            )
+        elif isinstance(self.sql, Iterable):
+            job_id = [
+                self.bq_cursor.run_query(
+                    sql=s,
+                    destination_dataset_table=self.destination_dataset_table,
+                    write_disposition=self.write_disposition,
+                    allow_large_results=self.allow_large_results,
+                    flatten_results=self.flatten_results,
+                    udf_config=self.udf_config,
+                    maximum_billing_tier=self.maximum_billing_tier,
+                    maximum_bytes_billed=self.maximum_bytes_billed,
+                    create_disposition=self.create_disposition,
+                    query_params=self.query_params,
+                    labels=self.labels,
+                    schema_update_options=self.schema_update_options,
+                    priority=self.priority,
+                    time_partitioning=self.time_partitioning,
+                    api_resource_configs=self.api_resource_configs,
+                    cluster_fields=self.cluster_fields,
+                )
+                for s in self.sql]
+        else:
+            raise AirflowException(
+                "argument 'sql' of type {} is neither a string nor an iterable".format(type(str)))
+        context['task_instance'].xcom_push(key='job_id', value=job_id)
 
     def on_kill(self):
         super(BigQueryOperator, self).on_kill()
@@ -309,6 +360,7 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
                        'gcs_schema_object', 'labels')
     ui_color = '#f0eee4'
 
+    # pylint: disable=too-many-arguments
     @apply_defaults
     def __init__(self,
                  dataset_id,
@@ -366,6 +418,7 @@ class BigQueryCreateEmptyTableOperator(BaseOperator):
         )
 
 
+# pylint: disable=too-many-instance-attributes
 class BigQueryCreateExternalTableOperator(BaseOperator):
     """
     Creates a new external table in the dataset with the data in Google Cloud
@@ -442,6 +495,7 @@ class BigQueryCreateExternalTableOperator(BaseOperator):
                        'schema_object', 'destination_project_dataset_table', 'labels')
     ui_color = '#f0eee4'
 
+    # pylint: disable=too-many-arguments
     @apply_defaults
     def __init__(self,
                  bucket,
@@ -460,7 +514,7 @@ class BigQueryCreateExternalTableOperator(BaseOperator):
                  bigquery_conn_id='bigquery_default',
                  google_cloud_storage_conn_id='google_cloud_default',
                  delegate_to=None,
-                 src_fmt_configs={},
+                 src_fmt_configs=None,
                  labels=None,
                  *args, **kwargs):
 
@@ -487,7 +541,7 @@ class BigQueryCreateExternalTableOperator(BaseOperator):
         self.google_cloud_storage_conn_id = google_cloud_storage_conn_id
         self.delegate_to = delegate_to
 
-        self.src_fmt_configs = src_fmt_configs
+        self.src_fmt_configs = src_fmt_configs if src_fmt_configs is not None else dict()
         self.labels = labels
 
     def execute(self, context):

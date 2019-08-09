@@ -139,6 +139,12 @@ class WorkerConfiguration(LoggingMixin):
         for env_var_name, env_var_val in six.iteritems(self.kube_config.kube_env_vars):
             env[env_var_name] = env_var_val
 
+        for env_var_name, env_var_val in six.iteritems(self.kube_config.kubernetes_environment):
+            env_var_key = env_var_name.split('_')[1]
+            if env_var_key in env.keys():
+                raise Exception('{} already exists in env vars'.format(env_var_key))
+            env[env_var_key] = env_var_val
+
         env["AIRFLOW__CORE__EXECUTOR"] = "LocalExecutor"
 
         if self.kube_config.airflow_configmap:
@@ -162,17 +168,6 @@ class WorkerConfiguration(LoggingMixin):
         if not self.kube_config.env_from_configmap_ref:
             return []
         return self.kube_config.env_from_configmap_ref.split(',')
-
-    def _get_dynamic_env(self):
-        dynamic_list = []
-        if len(self.kube_config.kubernetes_environment) > 0:
-            mount_dic = defaultdict(dict)
-            for key, value in self.kube_config.kubernetes_environment.items():
-                prefix, suffix = key.split('_')
-                mount_dic[prefix][suffix] = value
-            for prefix in mount_dic:
-                dynamic_list.append(mount_dic[prefix])
-        return dynamic_list
 
     def _get_secrets(self):
         """Defines any necessary secrets for the pod executor"""
@@ -202,10 +197,10 @@ class WorkerConfiguration(LoggingMixin):
         """Defines the security context"""
         security_context = {}
 
-        if self.kube_config.worker_run_as_user:
+        if self.kube_config.worker_run_as_user != "":
             security_context['runAsUser'] = self.kube_config.worker_run_as_user
 
-        if self.kube_config.worker_fs_group:
+        if self.kube_config.worker_fs_group != "":
             security_context['fsGroup'] = self.kube_config.worker_fs_group
 
         # set fs_group to 65533 if not explicitly specified and using git ssh keypair auth
@@ -213,6 +208,12 @@ class WorkerConfiguration(LoggingMixin):
             security_context['fsGroup'] = 65533
 
         return security_context
+
+    def _get_labels(self, kube_executor_labels, labels):
+        copy = self.kube_config.kube_labels.copy()
+        copy.update(kube_executor_labels)
+        copy.update(labels)
+        return copy
 
     def _get_volumes_and_mounts(self):
         def _construct_volume(name, claim, host):
@@ -291,7 +292,6 @@ class WorkerConfiguration(LoggingMixin):
                 'mode': 0o440
             }
 
-        # Mount the airflow.cfg file via a configmap the user has specified
         if self.kube_config.dags_configmap:
             dags_configmap_name = self.dags_configmap_name
             dag_path = '{}/dags'.format(self.worker_airflow_home)
@@ -307,6 +307,7 @@ class WorkerConfiguration(LoggingMixin):
                 'readOnly': True
             }
 
+        # Mount the airflow.cfg file via a configmap the user has specified
         if self.kube_config.airflow_configmap:
             config_volume_name = 'airflow-config'
             config_path = '{}/airflow.cfg'.format(self.worker_airflow_home)
@@ -344,6 +345,7 @@ class WorkerConfiguration(LoggingMixin):
                     'readOnly': True
                 }
 
+        # do we need both of these? They seem to do the same thing. 
         if len(self.kube_config.kubernetes_mounts) > 0:
             mount_dic = defaultdict(dict)
             for key, value in self.kube_config.kubernetes_mounts.items():
@@ -406,16 +408,14 @@ class WorkerConfiguration(LoggingMixin):
             image_pull_policy=(kube_executor_config.image_pull_policy or
                                self.kube_config.kube_image_pull_policy),
             cmds=airflow_command,
-            labels={
-                'release': self.kube_config.k8s_release,
+            labels=self._get_labels(kube_executor_config.labels, {
                 'airflow-worker': worker_uuid,
                 'dag_id': dag_id,
                 'task_id': task_id,
                 'execution_date': execution_date,
                 'try_number': str(try_number),
-            },
+            }),
             envs=self._get_environment(),
-            dynamic_env=self._get_dynamic_env(),
             secrets=self._get_secrets(),
             service_account_name=self.kube_config.worker_service_account_name,
             image_pull_secrets=self.kube_config.image_pull_secrets,
