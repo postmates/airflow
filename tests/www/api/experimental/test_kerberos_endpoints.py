@@ -25,7 +25,7 @@ import unittest
 from datetime import datetime
 
 from airflow import configuration
-from airflow.api.auth.backend.kerberos_auth import CLIENT_AUTH
+from airflow.api.auth.backend.kerberos_auth import client_auth
 from airflow.utils.net import get_hostname
 from airflow.www import app as application
 
@@ -74,12 +74,12 @@ class ApiKerberosTests(unittest.TestCase):
             response.connection.send = mock.MagicMock()
 
             # disable mutual authentication for testing
-            CLIENT_AUTH.mutual_authentication = 3
+            client_auth.mutual_authentication = 3
 
             # case can influence the results
-            CLIENT_AUTH.hostname_override = get_hostname()
+            client_auth.hostname_override = get_hostname()
 
-            CLIENT_AUTH.handle_response(response)
+            client_auth.handle_response(response)
             self.assertIn('Authorization', response.request.headers)
 
             response2 = c.post(

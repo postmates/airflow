@@ -111,11 +111,11 @@ def generate_pages(current_page, num_of_pages,
 </li>""")
 
     previous_node = Markup("""<li class="paginate_button previous {disabled}" id="dags_previous">
-    <a href="{href_link}" aria-controls="dags" data-dt-idx="0" tabindex="0">&lsaquo;</a>
+    <a href="{href_link}" aria-controls="dags" data-dt-idx="0" tabindex="0">&lt;</a>
 </li>""")
 
     next_node = Markup("""<li class="paginate_button next {disabled}" id="dags_next">
-    <a href="{href_link}" aria-controls="dags" data-dt-idx="3" tabindex="0">&rsaquo;</a>
+    <a href="{href_link}" aria-controls="dags" data-dt-idx="3" tabindex="0">&gt;</a>
 </li>""")
 
     last_node = Markup("""<li class="paginate_button {disabled}" id="dags_last">
@@ -203,9 +203,6 @@ def json_response(obj):
         mimetype="application/json")
 
 
-ZIP_REGEX = re.compile(r'((.*\.zip){})?(.*)'.format(re.escape(os.sep)))
-
-
 def open_maybe_zipped(f, mode='r'):
     """
     Opens the given file. If the path contains a folder with a .zip suffix, then
@@ -214,7 +211,8 @@ def open_maybe_zipped(f, mode='r'):
     :return: a file object, as in `open`, or as in `ZipFile.open`.
     """
 
-    _, archive, filename = ZIP_REGEX.search(f).groups()
+    _, archive, filename = re.search(
+        r'((.*\.zip){})?(.*)'.format(re.escape(os.sep)), f).groups()
     if archive and zipfile.is_zipfile(archive):
         return zipfile.ZipFile(archive, mode=mode).open(filename)
     else:
@@ -253,14 +251,14 @@ def task_instance_link(attr):
             aria-hidden="true"></span>
         </a>
         </span>
-        """).format(url=url, task_id=task_id, url_root=url_root)
+        """).format(**locals())
 
 
 def state_token(state):
     color = State.color(state)
     return Markup(
         '<span class="label" style="background-color:{color};">'
-        '{state}</span>').format(color=color, state=state)
+        '{state}</span>').format(**locals())
 
 
 def state_f(attr):
@@ -306,7 +304,7 @@ def dag_run_link(attr):
         run_id=run_id,
         execution_date=execution_date)
     return Markup(
-        '<a href="{url}">{run_id}</a>').format(url=url, run_id=run_id)
+        '<a href="{url}">{run_id}</a>').format(**locals())
 
 
 def pygment_html_render(s, lexer=lexers.TextLexer):

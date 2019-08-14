@@ -62,9 +62,8 @@ class FTPHook(BaseHook):
     """
     Interact with FTP.
 
-    Errors that may occur throughout but should be handled downstream.
-    You can specify mode for data transfers in the extra field of your
-    connection as ``{"passive": "true"}``.
+    Errors that may occur throughout but should be handled
+    downstream.
     """
 
     def __init__(self, ftp_conn_id='ftp_default'):
@@ -84,9 +83,7 @@ class FTPHook(BaseHook):
         """
         if self.conn is None:
             params = self.get_connection(self.ftp_conn_id)
-            pasv = params.extra_dejson.get("passive", True)
             self.conn = ftplib.FTP(params.host, params.login, params.password)
-            self.conn.set_pasv(pasv)
 
         return self.conn
 
@@ -174,7 +171,7 @@ class FTPHook(BaseHook):
             [default: output_handle.write()]
         :type callback: callable
 
-        .. code-block:: python
+        :Example::
 
             hook = FTPHook(ftp_conn_id='my_conn')
 
@@ -197,7 +194,6 @@ class FTPHook(BaseHook):
 
             # without a custom callback data is written to the local_path
             hook.retrieve_file(remote_path, local_path)
-
         """
         conn = self.get_conn()
 
@@ -307,7 +303,6 @@ class FTPSHook(FTPHook):
         """
         if self.conn is None:
             params = self.get_connection(self.ftp_conn_id)
-            pasv = params.extra_dejson.get("passive", True)
 
             if params.port:
                 ftplib.FTP_TLS.port = params.port
@@ -315,6 +310,5 @@ class FTPSHook(FTPHook):
             self.conn = ftplib.FTP_TLS(
                 params.host, params.login, params.password
             )
-            self.conn.set_pasv(pasv)
 
         return self.conn

@@ -30,7 +30,7 @@ TODO: Review the workflow, change it accordingly to
 #
 # from airflow import DAG
 # import airflow
-# from datetime import timedelta
+# from datetime import datetime, timedelta
 # from airflow.operators import BashOperator
 # from airflow.operators import ShortCircuitOperator
 # from airflow.operators.docker_operator import DockerOperator
@@ -38,7 +38,7 @@ TODO: Review the workflow, change it accordingly to
 # default_args = {
 #     'owner': 'airflow',
 #     'depends_on_past': False,
-#     'start_date': airflow.utils.dates.days_ago(2),
+#     'start_date': datetime.utcnow(),
 #     'email': ['airflow@example.com'],
 #     'email_on_failure': False,
 #     'email_on_retry': False,

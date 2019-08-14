@@ -1,91 +1,72 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2013, Michael Komitee
-# All rights reserved.
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
 #
-# Redistribution and use in source and binary forms, with or without modification,
-# are permitted provided that the following conditions are met:
+#   http://www.apache.org/licenses/LICENSE-2.0
 #
-# 1. Redistributions of source code must retain the above copyright notice,
-# this list of conditions and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-# this list of conditions and the following disclaimer in the documentation
-# and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Kerberos authentication module"""
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 
 from future.standard_library import install_aliases
 
+from airflow.utils.log.logging_mixin import LoggingMixin
+
+import kerberos
 import os
 
-from functools import wraps
-from socket import getfqdn
+from airflow import configuration as conf
 
 from flask import Response
-# noinspection PyProtectedMember
 from flask import _request_ctx_stack as stack  # type: ignore
 from flask import make_response
 from flask import request
 from flask import g
-
-import kerberos
+from functools import wraps
 
 from requests_kerberos import HTTPKerberosAuth
-
-from airflow import configuration as conf
-from airflow.utils.log.logging_mixin import LoggingMixin
-
+from socket import getfqdn
 
 install_aliases()
-# pylint: disable=c-extension-no-member
-CLIENT_AUTH = HTTPKerberosAuth(service='airflow')
 
-LOG = LoggingMixin().log
+client_auth = HTTPKerberosAuth(service='airflow')
 
+_SERVICE_NAME = None
 
-class KerberosService:  # pylint: disable=too-few-public-methods
-    """Class to keep information about the Kerberos Service initialized """
-    def __init__(self):
-        self.service_name = None
-
-
-# Stores currently initialized Kerberos Service
-_KERBEROS_SERVICE = KerberosService()
+log = LoggingMixin().log
 
 
 def init_app(app):
-    """Initializes application with kerberos"""
+    global _SERVICE_NAME
 
     hostname = app.config.get('SERVER_NAME')
     if not hostname:
         hostname = getfqdn()
-    LOG.info("Kerberos: hostname %s", hostname)
+    log.info("Kerberos: hostname %s", hostname)
 
     service = 'airflow'
 
-    _KERBEROS_SERVICE.service_name = "{}@{}".format(service, hostname)
+    _SERVICE_NAME = "{}@{}".format(service, hostname)
 
     if 'KRB5_KTNAME' not in os.environ:
         os.environ['KRB5_KTNAME'] = conf.get('kerberos', 'keytab')
 
     try:
-        LOG.info("Kerberos init: %s %s", service, hostname)
+        log.info("Kerberos init: %s %s", service, hostname)
         principal = kerberos.getServerPrincipalDetails(service, hostname)
     except kerberos.KrbError as err:
-        LOG.warning("Kerberos: %s", err)
+        log.warning("Kerberos: %s", err)
     else:
-        LOG.info("Kerberos API: server is %s", principal)
+        log.info("Kerberos API: server is %s", principal)
 
 
 def _unauthorized():
@@ -104,17 +85,18 @@ def _gssapi_authenticate(token):
     state = None
     ctx = stack.top
     try:
-        return_code, state = kerberos.authGSSServerInit(_KERBEROS_SERVICE.service_name)
-        if return_code != kerberos.AUTH_GSS_COMPLETE:
+        rc, state = kerberos.authGSSServerInit(_SERVICE_NAME)
+        if rc != kerberos.AUTH_GSS_COMPLETE:
             return None
-        return_code = kerberos.authGSSServerStep(state, token)
-        if return_code == kerberos.AUTH_GSS_COMPLETE:
+        rc = kerberos.authGSSServerStep(state, token)
+        if rc == kerberos.AUTH_GSS_COMPLETE:
             ctx.kerberos_token = kerberos.authGSSServerResponse(state)
             ctx.kerberos_user = kerberos.authGSSServerUserName(state)
-            return return_code
-        if return_code == kerberos.AUTH_GSS_CONTINUE:
+            return rc
+        elif rc == kerberos.AUTH_GSS_CONTINUE:
             return kerberos.AUTH_GSS_CONTINUE
-        return None
+        else:
+            return None
     except kerberos.GSSError:
         return None
     finally:
@@ -123,15 +105,14 @@ def _gssapi_authenticate(token):
 
 
 def requires_authentication(function):
-    """Decorator for functions that require authentication with Kerberos"""
     @wraps(function)
     def decorated(*args, **kwargs):
         header = request.headers.get("Authorization")
         if header:
             ctx = stack.top
             token = ''.join(header.split()[1:])
-            return_code = _gssapi_authenticate(token)
-            if return_code == kerberos.AUTH_GSS_COMPLETE:
+            rc = _gssapi_authenticate(token)
+            if rc == kerberos.AUTH_GSS_COMPLETE:
                 g.user = ctx.kerberos_user
                 response = function(*args, **kwargs)
                 response = make_response(response)
@@ -140,7 +121,7 @@ def requires_authentication(function):
                                                                      ctx.kerberos_token])
 
                 return response
-            if return_code != kerberos.AUTH_GSS_CONTINUE:
+            elif rc != kerberos.AUTH_GSS_CONTINUE:
                 return _forbidden()
         return _unauthorized()
     return decorated

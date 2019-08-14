@@ -158,7 +158,6 @@ var svg = d3.select("svg")
   }
 
 update(root = data);
-
 function update(source) {
 
   // Compute the flattened node list. TODO use d3.layout.hierarchy.
@@ -262,7 +261,7 @@ function update(source) {
           s += "Started: " + escapeHtml(d.start_date) + "<br>";
           s += "Ended: " + escapeHtml(d.end_date) + "<br>";
           if (d.duration != undefined) {
-            s += "Duration: " + escapeHtml(convertSecsToHumanReadable(d.duration)) + "<br>";
+            s += "Duration: " + escapeHtml(d.duration) + "<br>";
           }
           s += "State: " + escapeHtml(d.state) + "<br>";
         }

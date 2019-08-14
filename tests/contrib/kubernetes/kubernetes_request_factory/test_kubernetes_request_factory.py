@@ -19,7 +19,6 @@ from airflow.contrib.kubernetes.kubernetes_request_factory.\
     kubernetes_request_factory import KubernetesRequestFactory
 from airflow.contrib.kubernetes.pod import Pod, Resources
 from airflow.contrib.kubernetes.secret import Secret
-from airflow.contrib.kubernetes.pod_runtime_info_env import PodRuntimeInfoEnv
 from parameterized import parameterized
 import unittest
 import copy
@@ -192,25 +191,10 @@ class TestKubernetesRequestFactory(unittest.TestCase):
             'ENV2': 'val2'
         }
         configmaps = ['configmap_a', 'configmap_b']
-        pod_runtime_envs = [PodRuntimeInfoEnv("ENV3", "status.podIP")]
-        pod = Pod(
-            image='v3.14',
-            envs=envs,
-            cmds=[],
-            secrets=secrets,
-            configmaps=configmaps,
-            pod_runtime_info_envs=pod_runtime_envs)
+        pod = Pod('v3.14', envs, [], secrets=secrets, configmaps=configmaps)
         self.expected['spec']['containers'][0]['env'] = [
             {'name': 'ENV1', 'value': 'val1'},
             {'name': 'ENV2', 'value': 'val2'},
-            {
-                'name': 'ENV3',
-                'valueFrom': {
-                    'fieldRef': {
-                        'fieldPath': 'status.podIP'
-                    }
-                }
-            }
         ]
         self.expected['spec']['containers'][0]['envFrom'] = [{
             'secretRef': {
@@ -236,12 +220,7 @@ class TestKubernetesRequestFactory(unittest.TestCase):
 
     def test_extract_resources(self):
         # Test when resources is not empty
-        resources = Resources(
-            request_memory='1Gi',
-            request_cpu=1,
-            limit_memory='2Gi',
-            limit_cpu=2)
-
+        resources = Resources('1Gi', 1, '2Gi', 2)
         pod = Pod('v3.14', {}, [], resources=resources)
         self.expected['spec']['containers'][0]['resources'] = {
             'requests': {
@@ -252,46 +231,6 @@ class TestKubernetesRequestFactory(unittest.TestCase):
                 'memory': '2Gi',
                 'cpu': 2
             },
-        }
-        KubernetesRequestFactory.extract_resources(pod, self.input_req)
-        self.assertEqual(self.input_req, self.expected)
-
-    def test_extract_limits(self):
-        # Test when resources is not empty
-        resources = Resources(
-            limit_memory='1Gi',
-            limit_cpu=1)
-
-        pod = Pod('v3.14', {}, [], resources=resources)
-        self.expected['spec']['containers'][0]['resources'] = {
-            'limits': {
-                'memory': '1Gi',
-                'cpu': 1
-            }
-        }
-        KubernetesRequestFactory.extract_resources(pod, self.input_req)
-        self.assertEqual(self.expected, self.input_req)
-
-    def test_extract_all_resources(self):
-        # Test when resources is not empty
-        resources = Resources(
-            request_memory='1Gi',
-            request_cpu=1,
-            limit_memory='2Gi',
-            limit_cpu=2,
-            limit_gpu=3)
-
-        pod = Pod('v3.14', {}, [], resources=resources)
-        self.expected['spec']['containers'][0]['resources'] = {
-            'requests': {
-                'memory': '1Gi',
-                'cpu': 1
-            },
-            'limits': {
-                'memory': '2Gi',
-                'cpu': 2,
-                'nvidia.com/gpu': 3
-            }
         }
         KubernetesRequestFactory.extract_resources(pod, self.input_req)
         self.assertEqual(self.input_req, self.expected)

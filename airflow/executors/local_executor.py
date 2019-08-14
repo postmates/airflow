@@ -46,9 +46,9 @@ locally, into just one `LocalExecutor` with multiple modes.
 
 import multiprocessing
 import subprocess
+import time
 
 from builtins import range
-from queue import Empty
 
 from airflow.executors.base_executor import BaseExecutor
 from airflow.utils.log.logging_mixin import LoggingMixin
@@ -94,6 +94,7 @@ class LocalWorker(multiprocessing.Process, LoggingMixin):
 
     def run(self):
         self.execute_work(self.key, self.command)
+        time.sleep(1)
 
 
 class QueuedLocalWorker(LocalWorker):
@@ -109,13 +110,13 @@ class QueuedLocalWorker(LocalWorker):
     def run(self):
         while True:
             key, command = self.task_queue.get()
-            try:
-                if key is None:
-                    # Received poison pill, no more tasks to run
-                    break
-                self.execute_work(key, command)
-            finally:
+            if key is None:
+                # Received poison pill, no more tasks to run
                 self.task_queue.task_done()
+                break
+            self.execute_work(key, command)
+            self.task_queue.task_done()
+            time.sleep(1)
 
 
 class LocalExecutor(BaseExecutor):
@@ -163,6 +164,7 @@ class LocalExecutor(BaseExecutor):
         def end(self):
             while self.executor.workers_active > 0:
                 self.executor.sync()
+                time.sleep(0.5)
 
     class _LimitedParallelism(object):
         """Implements LocalExecutor with limited parallelism using a task queue to
@@ -172,9 +174,10 @@ class LocalExecutor(BaseExecutor):
             self.executor = executor
 
         def start(self):
-            self.queue = self.executor.manager.Queue()
+            self.executor.queue = multiprocessing.JoinableQueue()
+
             self.executor.workers = [
-                QueuedLocalWorker(self.queue, self.executor.result_queue)
+                QueuedLocalWorker(self.executor.queue, self.executor.result_queue)
                 for _ in range(self.executor.parallelism)
             ]
 
@@ -190,31 +193,25 @@ class LocalExecutor(BaseExecutor):
             :param command: the command to execute
             :type command: str
             """
-            self.queue.put((key, command))
+            self.executor.queue.put((key, command))
 
         def sync(self):
-            while True:
-                try:
-                    results = self.executor.result_queue.get_nowait()
-                    try:
-                        self.executor.change_state(*results)
-                    finally:
-                        self.executor.result_queue.task_done()
-                except Empty:
-                    break
+            while not self.executor.result_queue.empty():
+                results = self.executor.result_queue.get()
+                self.executor.change_state(*results)
 
         def end(self):
             # Sending poison pill to all worker
             for _ in self.executor.workers:
-                self.queue.put((None, None))
+                self.executor.queue.put((None, None))
 
             # Wait for commands to finish
-            self.queue.join()
+            self.executor.queue.join()
             self.executor.sync()
 
     def start(self):
-        self.manager = multiprocessing.Manager()
-        self.result_queue = self.manager.Queue()
+        self.result_queue = multiprocessing.Queue()
+        self.queue = None
         self.workers = []
         self.workers_used = 0
         self.workers_active = 0
@@ -231,4 +228,3 @@ class LocalExecutor(BaseExecutor):
 
     def end(self):
         self.impl.end()
-        self.manager.shutdown()

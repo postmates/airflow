@@ -16,14 +16,25 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Task APIs.."""
-from airflow.api.common.experimental import check_and_get_dag
-from airflow.models import TaskInstance
+
+from airflow.exceptions import DagNotFound, TaskNotFound
+from airflow.models import DagBag
 
 
-def get_task(dag_id, task_id):  # type: (str, str) -> TaskInstance
+def get_task(dag_id, task_id):
     """Return the task object identified by the given dag_id and task_id."""
-    dag = check_and_get_dag(dag_id, task_id)
+    dagbag = DagBag()
+
+    # Check DAG exists.
+    if dag_id not in dagbag.dags:
+        error_message = "Dag id {} not found".format(dag_id)
+        raise DagNotFound(error_message)
+
+    # Get DAG object and check Task Exists
+    dag = dagbag.get_dag(dag_id)
+    if not dag.has_task(task_id):
+        error_message = 'Task {} not found in dag {}'.format(task_id, dag_id)
+        raise TaskNotFound(error_message)
 
     # Return the task.
     return dag.get_task(task_id)

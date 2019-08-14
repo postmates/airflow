@@ -55,7 +55,7 @@ Using the operator
 Templating
 """"""""""
 
-.. literalinclude:: ../../../../airflow/contrib/operators/gcp_function_operator.py
+.. exampleinclude:: ../../../../airflow/contrib/operators/gcp_function_operator.py
     :language: python
     :dedent: 4
     :start-after: [START gcf_function_delete_template_fields]
@@ -154,7 +154,7 @@ from the GCP connection used:
 Templating
 """"""""""
 
-.. literalinclude:: ../../../../airflow/contrib/operators/gcp_function_operator.py
+.. exampleinclude:: ../../../../airflow/contrib/operators/gcp_function_operator.py
     :language: python
     :dedent: 4
     :start-after: [START gcf_function_deploy_template_fields]

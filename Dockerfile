@@ -26,13 +26,13 @@ ARG APT_DEPS="$buildDeps libsasl2-dev freetds-bin build-essential default-libmys
 
 WORKDIR /opt/airflow
 RUN set -x \
-    && apt-get update \
-    && if [ -n "${APT_DEPS}" ]; then apt-get install -y $APT_DEPS; fi \
+    && apt update \
+    && if [ -n "${APT_DEPS}" ]; then apt install -y $APT_DEPS; fi \
     && if [ -n "${PYTHON_DEPS}" ]; then pip install --no-cache-dir ${PYTHON_DEPS}; fi \
     && SLUGIFY_USES_TEXT_UNIDECODE=yes pip install --no-cache-dir -e .[$AIRFLOW_DEPS] \
-    && apt-get purge --auto-remove -yqq $buildDeps \
-    && apt-get autoremove -yqq --purge \
-    && apt-get clean
+    && apt purge --auto-remove -yqq $buildDeps \
+    && apt autoremove -yqq --purge \
+    && apt clean
 
 WORKDIR $AIRFLOW_HOME
 RUN mkdir -p $AIRFLOW_HOME

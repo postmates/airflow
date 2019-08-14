@@ -58,12 +58,13 @@ class KubernetesRequestFactory:
         })
 
     @staticmethod
-    def add_runtime_info_env(env, runtime_info):
+    def add_field_ref_to_env(env, fieldRef):
         env.append({
-            'name': runtime_info.name,
+            'name': fieldRef['name'],
             'valueFrom': {
                 'fieldRef': {
-                    'fieldPath': runtime_info.field_path
+                    'apiVersion': fieldRef['api'],
+                    'fieldPath': fieldRef['path']
                 }
             }
         })
@@ -99,13 +100,6 @@ class KubernetesRequestFactory:
     @staticmethod
     def extract_args(pod, req):
         req['spec']['containers'][0]['args'] = pod.args
-
-    @staticmethod
-    def attach_ports(pod, req):
-        req['spec']['containers'][0]['ports'] = (
-            req['spec']['containers'][0].get('ports', []))
-        if len(pod.ports) > 0:
-            req['spec']['containers'][0]['ports'].extend(pod.ports)
 
     @staticmethod
     def attach_volumes(pod, req):
@@ -149,18 +143,19 @@ class KubernetesRequestFactory:
 
     @staticmethod
     def extract_env_and_secrets(pod, req):
+        dynamic_env = pod.dynamic_env
         envs_from_key_secrets = [
             env for env in pod.secrets if env.deploy_type == 'env' and env.key is not None
         ]
 
-        if len(pod.envs) > 0 or len(envs_from_key_secrets) > 0 or len(pod.pod_runtime_info_envs) > 0:
+        if len(pod.envs) > 0 or len(envs_from_key_secrets) > 0 or len(dynamic_env) > 0:
             env = []
             for k in pod.envs.keys():
                 env.append({'name': k, 'value': pod.envs[k]})
+            for fieldRef in dynamic_env:
+                KubernetesRequestFactory.add_field_ref_to_env(env, fieldRef)
             for secret in envs_from_key_secrets:
                 KubernetesRequestFactory.add_secret_to_env(env, secret)
-            for runtime_info in pod.pod_runtime_info_envs:
-                KubernetesRequestFactory.add_runtime_info_env(env, runtime_info)
 
             req['spec']['containers'][0]['env'] = env
 
@@ -184,15 +179,12 @@ class KubernetesRequestFactory:
 
         if pod.resources.has_limits():
             req['spec']['containers'][0]['resources']['limits'] = {}
-            if pod.resources.limit_memory:
+            if pod.resources.request_memory:
                 req['spec']['containers'][0]['resources']['limits'][
                     'memory'] = pod.resources.limit_memory
-            if pod.resources.limit_cpu:
+            if pod.resources.request_cpu:
                 req['spec']['containers'][0]['resources']['limits'][
                     'cpu'] = pod.resources.limit_cpu
-            if pod.resources.limit_gpu:
-                req['spec']['containers'][0]['resources']['limits'][
-                    'nvidia.com/gpu'] = pod.resources.limit_gpu
 
     @staticmethod
     def extract_init_containers(pod, req):
@@ -208,11 +200,6 @@ class KubernetesRequestFactory:
     def extract_hostnetwork(pod, req):
         if pod.hostnetwork:
             req['spec']['hostNetwork'] = pod.hostnetwork
-
-    @staticmethod
-    def extract_dnspolicy(pod, req):
-        if pod.dnspolicy:
-            req['spec']['dnsPolicy'] = pod.dnspolicy
 
     @staticmethod
     def extract_image_pull_secrets(pod, req):

@@ -132,8 +132,13 @@ class HiveStatsCollectionOperator(BaseOperator):
         where_clause = [
             "{0} = '{1}'".format(k, v) for k, v in self.partition.items()]
         where_clause = " AND\n        ".join(where_clause)
-        sql = "SELECT {exprs_str} FROM {table} WHERE {where_clause};".format(
-            exprs_str=exprs_str, table=self.table, where_clause=where_clause)
+        sql = """
+        SELECT
+            {exprs_str}
+        FROM {self.table}
+        WHERE
+            {where_clause};
+        """.format(**locals())
 
         hook = PrestoHook(presto_conn_id=self.presto_conn_id)
         self.log.info('Executing SQL check: %s', sql)
@@ -149,19 +154,19 @@ class HiveStatsCollectionOperator(BaseOperator):
         sql = """
         SELECT 1 FROM hive_stats
         WHERE
-            table_name='{table}' AND
+            table_name='{self.table}' AND
             partition_repr='{part_json}' AND
-            dttm='{dttm}'
+            dttm='{self.dttm}'
         LIMIT 1;
-        """.format(table=self.table, part_json=part_json, dttm=self.dttm)
+        """.format(**locals())
         if mysql.get_records(sql):
             sql = """
             DELETE FROM hive_stats
             WHERE
-                table_name='{table}' AND
+                table_name='{self.table}' AND
                 partition_repr='{part_json}' AND
-                dttm='{dttm}';
-            """.format(table=self.table, part_json=part_json, dttm=self.dttm)
+                dttm='{self.dttm}';
+            """.format(**locals())
             mysql.run(sql)
 
         self.log.info("Pivoting and loading cells into the Airflow db")

@@ -16,18 +16,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Default authentication backend - everything is allowed"""
+
 from functools import wraps
 
-CLIENT_AUTH = None
+client_auth = None
 
 
-def init_app(_):
-    """Initializes authentication backend"""
+def init_app(app):
+    pass
 
 
 def requires_authentication(function):
-    """Decorator for functions that require authentication"""
     @wraps(function)
     def decorated(*args, **kwargs):
         return function(*args, **kwargs)

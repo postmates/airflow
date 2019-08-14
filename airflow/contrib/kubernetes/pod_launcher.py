@@ -17,10 +17,7 @@
 
 import json
 import time
-import tenacity
 from typing import Tuple, Optional
-
-from airflow.settings import pod_mutation_hook
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.state import State
 from datetime import datetime as dt
@@ -31,7 +28,7 @@ from kubernetes import watch, client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream as kubernetes_stream
 from airflow import AirflowException
-from requests.exceptions import BaseHTTPError
+from requests.exceptions import HTTPError
 from .kube_client import get_kube_client
 
 
@@ -53,13 +50,11 @@ class PodLauncher(LoggingMixin):
         self.kube_req_factory = pod_factory.ExtractXcomPodRequestFactory(
         ) if extract_xcom else pod_factory.SimplePodRequestFactory()
 
-    def run_pod_async(self, pod, **kwargs):
-        pod_mutation_hook(pod)
-
+    def run_pod_async(self, pod):
         req = self.kube_req_factory.create(pod)
         self.log.debug('Pod Creation Request: \n%s', json.dumps(req, indent=2))
         try:
-            resp = self._client.create_namespaced_pod(body=req, namespace=pod.namespace, **kwargs)
+            resp = self._client.create_namespaced_pod(body=req, namespace=pod.namespace)
             self.log.debug('Pod Creation Response: %s', resp)
         except ApiException:
             self.log.exception('Exception when attempting to create Namespaced Pod.')
@@ -100,7 +95,13 @@ class PodLauncher(LoggingMixin):
         # type: (Pod, bool) -> Tuple[State, Optional[str]]
 
         if get_logs:
-            logs = self.read_pod_logs(pod)
+            logs = self._client.read_namespaced_pod_log(
+                name=pod.name,
+                namespace=pod.namespace,
+                container='base',
+                follow=True,
+                tail_lines=10,
+                _preload_content=False)
             for line in logs:
                 self.log.info(line)
         result = None
@@ -137,36 +138,10 @@ class PodLauncher(LoggingMixin):
                                   event.status.container_statuses)), None)
         return status.state.running is not None
 
-    @tenacity.retry(
-        stop=tenacity.stop_after_attempt(3),
-        wait=tenacity.wait_exponential(),
-        reraise=True
-    )
-    def read_pod_logs(self, pod):
-
-        try:
-            return self._client.read_namespaced_pod_log(
-                name=pod.name,
-                namespace=pod.namespace,
-                container='base',
-                follow=True,
-                tail_lines=10,
-                _preload_content=False
-            )
-        except BaseHTTPError as e:
-            raise AirflowException(
-                'There was an error reading the kubernetes API: {}'.format(e)
-            )
-
-    @tenacity.retry(
-        stop=tenacity.stop_after_attempt(3),
-        wait=tenacity.wait_exponential(),
-        reraise=True
-    )
     def read_pod(self, pod):
         try:
             return self._client.read_namespaced_pod(pod.name, pod.namespace)
-        except BaseHTTPError as e:
+        except HTTPError as e:
             raise AirflowException(
                 'There was an error reading the kubernetes API: {}'.format(e)
             )
