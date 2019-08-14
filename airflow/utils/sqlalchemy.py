@@ -78,13 +78,7 @@ def setup_event_handlers(engine,
                         err)
                     raise
                 if err.connection_invalidated:
-                    # Don't log the first time -- this happens a lot and unless
-                    # there is a problem reconnecting is not a sign of a
-                    # problem
-                    if backoff > initial_backoff_seconds:
-                        log.warning("DB connection invalidated. Reconnecting...")
-                    else:
-                        log.debug("DB connection invalidated. Initial reconnect")
+                    log.warning("DB connection invalidated. Reconnecting...")
 
                     # Use a truncated binary exponential backoff. Also includes
                     # a jitter to prevent the thundering herd problem of

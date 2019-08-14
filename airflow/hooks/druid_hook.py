@@ -63,8 +63,7 @@ class DruidHook(BaseHook):
         port = conn.port
         conn_type = 'http' if not conn.conn_type else conn.conn_type
         endpoint = conn.extra_dejson.get('endpoint', '')
-        return "{conn_type}://{host}:{port}/{endpoint}".format(
-            conn_type=conn_type, host=host, port=port, endpoint=endpoint)
+        return "{conn_type}://{host}:{port}/{endpoint}".format(**locals())
 
     def submit_indexing_job(self, json_index_spec):
         url = self.get_conn_url()

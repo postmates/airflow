@@ -21,64 +21,68 @@ import unittest
 from collections import namedtuple
 
 from cryptography.fernet import Fernet
+from mock import patch
 from parameterized import parameterized
 
-from airflow.models import Connection, crypto
-from tests.test_utils.config import conf_vars
+from airflow import models
+from airflow.models.connection import Connection
 
 ConnectionParts = namedtuple("ConnectionParts", ["conn_type", "login", "password", "host", "port", "schema"])
 
 
 class ConnectionTest(unittest.TestCase):
     def setUp(self):
-        crypto._fernet = None
+        models._fernet = None
 
     def tearDown(self):
-        crypto._fernet = None
+        models._fernet = None
 
-    @conf_vars({('core', 'FERNET_KEY'): ''})
-    def test_connection_extra_no_encryption(self):
+    @patch('airflow.models.configuration.conf.get')
+    def test_connection_extra_no_encryption(self, mock_get):
         """
         Tests extras on a new connection without encryption. The fernet key
         is set to a non-base64-encoded string and the extra is stored without
         encryption.
         """
+        mock_get.return_value = ''
         test_connection = Connection(extra='testextra')
         self.assertFalse(test_connection.is_extra_encrypted)
         self.assertEqual(test_connection.extra, 'testextra')
 
-    @conf_vars({('core', 'FERNET_KEY'): Fernet.generate_key().decode()})
-    def test_connection_extra_with_encryption(self):
+    @patch('airflow.models.configuration.conf.get')
+    def test_connection_extra_with_encryption(self, mock_get):
         """
         Tests extras on a new connection with encryption.
         """
+        mock_get.return_value = Fernet.generate_key().decode()
         test_connection = Connection(extra='testextra')
         self.assertTrue(test_connection.is_extra_encrypted)
         self.assertEqual(test_connection.extra, 'testextra')
 
-    def test_connection_extra_with_encryption_rotate_fernet_key(self):
+    @patch('airflow.models.configuration.conf.get')
+    def test_connection_extra_with_encryption_rotate_fernet_key(self, mock_get):
         """
         Tests rotating encrypted extras.
         """
         key1 = Fernet.generate_key()
         key2 = Fernet.generate_key()
 
-        with conf_vars({('core', 'FERNET_KEY'): key1.decode()}):
-            test_connection = Connection(extra='testextra')
-            self.assertTrue(test_connection.is_extra_encrypted)
-            self.assertEqual(test_connection.extra, 'testextra')
-            self.assertEqual(Fernet(key1).decrypt(test_connection._extra.encode()), b'testextra')
+        mock_get.return_value = key1.decode()
+        test_connection = Connection(extra='testextra')
+        self.assertTrue(test_connection.is_extra_encrypted)
+        self.assertEqual(test_connection.extra, 'testextra')
+        self.assertEqual(Fernet(key1).decrypt(test_connection._extra.encode()), b'testextra')
 
         # Test decrypt of old value with new key
-        with conf_vars({('core', 'FERNET_KEY'): ','.join([key2.decode(), key1.decode()])}):
-            crypto._fernet = None
-            self.assertEqual(test_connection.extra, 'testextra')
+        mock_get.return_value = ','.join([key2.decode(), key1.decode()])
+        models._fernet = None
+        self.assertEqual(test_connection.extra, 'testextra')
 
-            # Test decrypt of new value with new key
-            test_connection.rotate_fernet_key()
-            self.assertTrue(test_connection.is_extra_encrypted)
-            self.assertEqual(test_connection.extra, 'testextra')
-            self.assertEqual(Fernet(key2).decrypt(test_connection._extra.encode()), b'testextra')
+        # Test decrypt of new value with new key
+        test_connection.rotate_fernet_key()
+        self.assertTrue(test_connection.is_extra_encrypted)
+        self.assertEqual(test_connection.extra, 'testextra')
+        self.assertEqual(Fernet(key2).decrypt(test_connection._extra.encode()), b'testextra')
 
     def test_connection_from_uri_without_extras(self):
         uri = 'scheme://user:password@host%2flocation:1234/schema'

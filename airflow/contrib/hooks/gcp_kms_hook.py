@@ -43,7 +43,6 @@ class GoogleCloudKMSHook(GoogleCloudBaseHook):
 
     def __init__(self, gcp_conn_id='google_cloud_default', delegate_to=None):
         super(GoogleCloudKMSHook, self).__init__(gcp_conn_id, delegate_to=delegate_to)
-        self.num_retries = self._get_field('num_retries', 5)
 
     def get_conn(self):
         """
@@ -77,7 +76,7 @@ class GoogleCloudKMSHook(GoogleCloudBaseHook):
             body['additionalAuthenticatedData'] = _b64encode(authenticated_data)
 
         request = keys.encrypt(name=key_name, body=body)
-        response = request.execute(num_retries=self.num_retries)
+        response = request.execute()
 
         ciphertext = response['ciphertext']
         return ciphertext
@@ -103,7 +102,7 @@ class GoogleCloudKMSHook(GoogleCloudBaseHook):
             body['additionalAuthenticatedData'] = _b64encode(authenticated_data)
 
         request = keys.decrypt(name=key_name, body=body)
-        response = request.execute(num_retries=self.num_retries)
+        response = request.execute()
 
         plaintext = _b64decode(response['plaintext'])
         return plaintext

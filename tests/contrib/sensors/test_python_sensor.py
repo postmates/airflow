@@ -23,17 +23,23 @@ import unittest
 from airflow import DAG, configuration
 from airflow.contrib.sensors.python_sensor import PythonSensor
 from airflow.exceptions import AirflowSensorTimeout
+from airflow.models import DagBag
 from airflow.utils.timezone import datetime
 
 
 DEFAULT_DATE = datetime(2015, 1, 1)
 TEST_DAG_ID = 'python_sensor_dag'
+DEV_NULL = '/dev/null'
 
 
 class PythonSensorTests(unittest.TestCase):
 
     def setUp(self):
         configuration.load_test_config()
+        self.dagbag = DagBag(
+            dag_folder=DEV_NULL,
+            include_examples=True
+        )
         self.args = {
             'owner': 'airflow',
             'start_date': DEFAULT_DATE
@@ -51,8 +57,7 @@ class PythonSensorTests(unittest.TestCase):
     def test_python_sensor_false(self):
         t = PythonSensor(
             task_id='python_sensor_check_false',
-            timeout=0.01,
-            poke_interval=0.01,
+            timeout=1,
             python_callable=lambda: False,
             dag=self.dag)
         with self.assertRaises(AirflowSensorTimeout):

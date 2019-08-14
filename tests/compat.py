@@ -21,7 +21,6 @@ try:
 except ImportError:
     import mock  # type: ignore  # noqa: F401
 
-call = mock.call
 patch = mock.patch
 Mock = mock.Mock
 MagicMock = mock.MagicMock

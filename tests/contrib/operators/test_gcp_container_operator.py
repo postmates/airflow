@@ -55,7 +55,7 @@ class GoogleCloudPlatformContainerOperatorTest(unittest.TestCase):
 
         operator.execute(None)
         mock_hook.return_value.create_cluster.assert_called_once_with(
-            cluster=PROJECT_BODY_CREATE, project_id=TEST_GCP_PROJECT_ID)
+            cluster=PROJECT_BODY_CREATE)
 
     @mock.patch('airflow.contrib.operators.gcp_container_operator.GKEClusterHook')
     def test_create_execute_error_body(self, mock_hook):
@@ -97,7 +97,7 @@ class GoogleCloudPlatformContainerOperatorTest(unittest.TestCase):
 
         operator.execute(None)
         mock_hook.return_value.delete_cluster.assert_called_once_with(
-            name=CLUSTER_NAME, project_id=TEST_GCP_PROJECT_ID)
+            name=CLUSTER_NAME)
 
     @mock.patch('airflow.contrib.operators.gcp_container_operator.GKEClusterHook')
     def test_delete_execute_error_project_id(self, mock_hook):
@@ -241,22 +241,17 @@ class GKEPodOperatorTest(unittest.TestCase):
     @mock.patch.dict(os.environ, {})
     @mock.patch('tempfile.NamedTemporaryFile')
     def test_set_env_from_extras_dict(self, file_mock):
-
-        keyfile_dict_str = '{ \"test\": \"cluster\" }'
-        extras = {
-            'extra__google_cloud_platform__keyfile_dict': keyfile_dict_str,
-        }
-
-        def mock_temp_write(content):
-            if not isinstance(content, bytes):
-                raise TypeError("a bytes-like object is required, not {}".format(type(content).__name__))
-
-        file_mock.return_value.write = mock_temp_write
         file_mock.return_value.name = FILE_NAME
 
-        key_file = self.gke_op._set_env_from_extras(extras)
+        KEYFILE_DICT_STR = '{ \"test\": \"cluster\" }'
+        extras = {
+            'extra__google_cloud_platform__keyfile_dict': KEYFILE_DICT_STR,
+        }
+
+        self.gke_op._set_env_from_extras(extras)
         self.assertEqual(os.environ[GAC_ENV_VAR], FILE_NAME)
-        self.assertIsInstance(key_file, mock.MagicMock)
+
+        file_mock.return_value.write.assert_called_once_with(KEYFILE_DICT_STR)
 
     @mock.patch.dict(os.environ, {})
     def test_set_env_from_extras_path(self):

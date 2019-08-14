@@ -17,38 +17,36 @@
 #  specific language governing permissions and limitations      *
 #  under the License.                                           *
 
-IMAGE=${IMAGE:-airflow}
-TAG=${TAG:-latest}
-DIRNAME=$(cd "$(dirname "$0")" && pwd)
-AIRFLOW_ROOT="${DIRNAME}/../../../.."
-PYTHON_DOCKER_IMAGE=python:3.6-slim
+IMAGE=${1:-airflow}
+TAG=${2:-latest}
+DIRNAME=$(cd "$(dirname "$0")"; pwd)
+AIRFLOW_ROOT="$DIRNAME/../../../.."
 
 set -e
 
-# Don't rebuild the image more than once on travis
-if [[ -n "${TRAVIS}" || -z "${AIRFLOW_CI_REUSE_K8S_IMAGE}" ]] && \
-    docker image inspect "${IMAGE}:${TAG}" > /dev/null 2>/dev/null; then
-  echo "Re-using existing image"
-  exit 0
-fi
-
-if [[ "${VM_DRIVER:-none}" != "none" ]]; then
-    if ENVCONFIG=$(minikube docker-env); then
-      eval "${ENVCONFIG}"
+if [ "${VM_DRIVER:-none}" != "none" ]; then
+    ENVCONFIG=$(minikube docker-env)
+    if [ $? -eq 0 ]; then
+      eval $ENVCONFIG
     fi
 fi
 
-echo "Airflow directory ${AIRFLOW_ROOT}"
-echo "Airflow Docker directory ${DIRNAME}"
+echo "Airflow directory $AIRFLOW_ROOT"
+echo "Airflow Docker directory $DIRNAME"
 
-cd "${AIRFLOW_ROOT}"
-docker run -ti --rm -v "${AIRFLOW_ROOT}:/airflow" \
-    -w /airflow "${PYTHON_DOCKER_IMAGE}" ./scripts/ci/kubernetes/docker/compile.sh
+if [[ ${PYTHON_VERSION} == '3' ]]; then
+  PYTHON_DOCKER_IMAGE=python:3.6-slim
+else
+  PYTHON_DOCKER_IMAGE=python:2.7-slim
+fi
 
-sudo rm -rf "${AIRFLOW_ROOT}/airflow/www/node_modules"
-sudo rm -rf "${AIRFLOW_ROOT}/airflow/www_rbac/node_modules"
+cd $AIRFLOW_ROOT
+docker run -ti --rm -v ${AIRFLOW_ROOT}:/airflow \
+    -w /airflow ${PYTHON_DOCKER_IMAGE} ./scripts/ci/kubernetes/docker/compile.sh \
 
-echo "Copy distro ${AIRFLOW_ROOT}/dist/*.tar.gz ${DIRNAME}/airflow.tar.gz"
-cp ${AIRFLOW_ROOT}/dist/*.tar.gz "${DIRNAME}/airflow.tar.gz"
-cd "${DIRNAME}" && docker build --pull "${DIRNAME}" --tag="${IMAGE}:${TAG}"
-rm "${DIRNAME}/airflow.tar.gz"
+sudo rm -rf ${AIRFLOW_ROOT}/airflow/www_rbac/node_modules
+
+echo "Copy distro $AIRFLOW_ROOT/dist/*.tar.gz ${DIRNAME}/airflow.tar.gz"
+cp $AIRFLOW_ROOT/dist/*.tar.gz ${DIRNAME}/airflow.tar.gz
+cd $DIRNAME && docker build --pull $DIRNAME --tag=${IMAGE}:${TAG}
+rm $DIRNAME/airflow.tar.gz

@@ -23,7 +23,6 @@ import copy
 import logging
 import os
 import unittest
-from collections import namedtuple
 from datetime import timedelta, date
 
 from airflow import configuration
@@ -150,11 +149,6 @@ class PythonOperatorTest(unittest.TestCase):
         """Test PythonOperator op_args are templatized"""
         recorded_calls = []
 
-        # Create a named tuple and ensure it is still preserved
-        # after the rendering is done
-        Named = namedtuple('Named', ['var1', 'var2'])
-        named_tuple = Named('{{ ds }}', 'unchanged')
-
         task = PythonOperator(
             task_id='python_operator',
             # a Mock instance cannot be used as a callable function or test fails with a
@@ -163,8 +157,7 @@ class PythonOperatorTest(unittest.TestCase):
             op_args=[
                 4,
                 date(2019, 1, 1),
-                "dag {{dag.dag_id}} ran on {{ds}}.",
-                named_tuple
+                "dag {{dag.dag_id}} ran on {{ds}}."
             ],
             dag=self.dag)
 
@@ -176,14 +169,12 @@ class PythonOperatorTest(unittest.TestCase):
         )
         task.run(start_date=DEFAULT_DATE, end_date=DEFAULT_DATE)
 
-        ds_templated = DEFAULT_DATE.date().isoformat()
         self.assertEqual(1, len(recorded_calls))
         self._assertCallsEqual(
             recorded_calls[0],
             Call(4,
                  date(2019, 1, 1),
-                 "dag {} ran on {}.".format(self.dag.dag_id, ds_templated),
-                 Named(ds_templated, 'unchanged'))
+                 "dag {} ran on {}.".format(self.dag.dag_id, DEFAULT_DATE.date().isoformat()))
         )
 
     def test_python_callable_keyword_arguments_are_templatized(self):

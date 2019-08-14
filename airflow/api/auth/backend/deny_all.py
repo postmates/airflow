@@ -16,23 +16,20 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Authentication backend that denies all requests"""
+
 from functools import wraps
 from flask import Response
 
-CLIENT_AUTH = None
+client_auth = None
 
 
-def init_app(_):
-    """Initializes authentication"""
+def init_app(app):
+    pass
 
 
 def requires_authentication(function):
-    """Decorator for functions that require authentication"""
-
-    # noinspection PyUnusedLocal
     @wraps(function)
-    def decorated(*args, **kwargs):  # pylint: disable=unused-argument
+    def decorated(*args, **kwargs):
         return Response("Forbidden", 403)
 
     return decorated

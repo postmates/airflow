@@ -22,6 +22,7 @@ from __future__ import print_function
 import json
 import unittest
 
+import doctest
 import mock
 import multiprocessing
 import os
@@ -47,8 +48,10 @@ from airflow.executors import SequentialExecutor
 from airflow.models import Variable, TaskInstance
 
 
-from airflow import jobs, models, DAG, utils, settings, exceptions
-from airflow.models import BaseOperator, Connection, TaskFail
+from airflow import jobs, models, DAG, utils, macros, settings, exceptions
+from airflow.models import BaseOperator
+from airflow.models.connection import Connection
+from airflow.models.taskfail import TaskFail
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.check_operator import CheckOperator, ValueCheckOperator
 from airflow.operators.dagrun_operator import TriggerDagRunOperator
@@ -69,11 +72,10 @@ from airflow.configuration import AirflowConfigException, run_command
 from jinja2.exceptions import SecurityError
 from jinja2 import UndefinedError
 from pendulum import utcnow
+
 import six
 
-from tests.test_utils.config import conf_vars
-
-NUM_EXAMPLE_DAGS = 19
+NUM_EXAMPLE_DAGS = 18
 DEV_NULL = '/dev/null'
 TEST_DAG_FOLDER = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), 'dags')
@@ -620,7 +622,7 @@ class CoreTest(unittest.TestCase):
 
         def verify_templated_field(context):
             self.assertEqual(context['ti'].task.some_templated_field,
-                             u'{\n  "foo": "bar"\n}')
+                             u'{"foo": "bar"}')
 
         t = OperatorSubclass(
             task_id='test_complex_template',
@@ -694,6 +696,13 @@ class CoreTest(unittest.TestCase):
         ti.dag = self.dag_bash
         ti.run(ignore_ti_state=True)
 
+    def test_doctests(self):
+        modules = [utils, macros]
+        for mod in modules:
+            failed, tests = doctest.testmod(mod)
+            if failed:
+                raise Exception("Failed a doctest")
+
     def test_variable_set_get_round_trip(self):
         Variable.set("tested_var_set_id", "Monday morning breakfast")
         self.assertEqual("Monday morning breakfast", Variable.get("tested_var_set_id"))
@@ -762,25 +771,35 @@ class CoreTest(unittest.TestCase):
 
         FERNET_KEY = configuration.conf.get('core', 'FERNET_KEY')
 
-        with conf_vars({('core', 'FERNET_KEY_CMD'): 'printf HELLO'}):
-            FALLBACK_FERNET_KEY = configuration.conf.get(
-                "core",
-                "FERNET_KEY"
-            )
+        configuration.conf.set("core", "FERNET_KEY_CMD", "printf HELLO")
+
+        FALLBACK_FERNET_KEY = configuration.conf.get(
+            "core",
+            "FERNET_KEY"
+        )
 
         self.assertEqual(FERNET_KEY, FALLBACK_FERNET_KEY)
+
+        # restore the conf back to the original state
+        configuration.conf.remove_option("core", "FERNET_KEY_CMD")
 
     def test_config_throw_error_when_original_and_fallback_is_absent(self):
         self.assertTrue(configuration.conf.has_option("core", "FERNET_KEY"))
         self.assertFalse(configuration.conf.has_option("core", "FERNET_KEY_CMD"))
 
-        with conf_vars({('core', 'FERNET_KEY'): None}):
-            with self.assertRaises(AirflowConfigException) as cm:
-                configuration.conf.get("core", "FERNET_KEY")
+        FERNET_KEY = configuration.conf.get("core", "FERNET_KEY")
+        configuration.conf.remove_option("core", "FERNET_KEY")
+
+        with self.assertRaises(AirflowConfigException) as cm:
+            configuration.conf.get("core", "FERNET_KEY")
 
         exception = str(cm.exception)
         message = "section/key [core/fernet_key] not found in config"
         self.assertEqual(message, exception)
+
+        # restore the conf back to the original state
+        configuration.conf.set("core", "FERNET_KEY", FERNET_KEY)
+        self.assertTrue(configuration.conf.has_option("core", "FERNET_KEY"))
 
     def test_config_override_original_when_non_empty_envvar_is_provided(self):
         key = "AIRFLOW__CORE__FERNET_KEY"
@@ -1446,6 +1465,23 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(AirflowException):
             cli.get_dags(self.parser.parse_args(['clear', 'foobar', '-dx', '-c']))
 
+    def test_backfill(self):
+        cli.backfill(self.parser.parse_args([
+            'backfill', 'example_bash_operator',
+            '-s', DEFAULT_DATE.isoformat()]))
+
+        cli.backfill(self.parser.parse_args([
+            'backfill', 'example_bash_operator', '-t', 'runme_0', '--dry_run',
+            '-s', DEFAULT_DATE.isoformat()]))
+
+        cli.backfill(self.parser.parse_args([
+            'backfill', 'example_bash_operator', '--dry_run',
+            '-s', DEFAULT_DATE.isoformat()]))
+
+        cli.backfill(self.parser.parse_args([
+            'backfill', 'example_bash_operator', '-l',
+            '-s', DEFAULT_DATE.isoformat()]))
+
     def test_process_subdir_path_with_placeholder(self):
         self.assertEqual(os.path.join(settings.DAGS_FOLDER, 'abc'), cli.process_subdir('DAGS_FOLDER/abc'))
 
@@ -1573,8 +1609,8 @@ class CliTests(unittest.TestCase):
         cli.variables(self.parser.parse_args([
             'variables', '-i', 'variables1.json']))
 
-        self.assertEqual('original', Variable.get('bar'))
-        self.assertEqual('{\n  "foo": "bar"\n}', Variable.get('foo'))
+        self.assertEqual('original', models.Variable.get('bar'))
+        self.assertEqual('{"foo": "bar"}', models.Variable.get('foo'))
         # Second export
         cli.variables(self.parser.parse_args([
             'variables', '-e', 'variables2.json']))
@@ -1587,53 +1623,11 @@ class CliTests(unittest.TestCase):
         cli.variables(self.parser.parse_args([
             'variables', '-i', 'variables2.json']))
 
-        self.assertEqual('original', Variable.get('bar'))
-        self.assertEqual('{\n  "foo": "bar"\n}', Variable.get('foo'))
-
-        # Set a dict
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'dict', '{"foo": "oops"}']))
-        # Set a list
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'list', '["oops"]']))
-        # Set str
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'str', 'hello string']))
-        # Set int
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'int', '42']))
-        # Set float
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'float', '42.0']))
-        # Set true
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'true', 'true']))
-        # Set false
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'false', 'false']))
-        # Set none
-        cli.variables(self.parser.parse_args([
-            'variables', '-s', 'null', 'null']))
-
-        # Export and then import
-        cli.variables(self.parser.parse_args([
-            'variables', '-e', 'variables3.json']))
-        cli.variables(self.parser.parse_args([
-            'variables', '-i', 'variables3.json']))
-
-        # Assert value
-        self.assertEqual({'foo': 'oops'}, models.Variable.get('dict', deserialize_json=True))
-        self.assertEqual(['oops'], models.Variable.get('list', deserialize_json=True))
-        self.assertEqual('hello string', models.Variable.get('str'))  # cannot json.loads(str)
-        self.assertEqual(42, models.Variable.get('int', deserialize_json=True))
-        self.assertEqual(42.0, models.Variable.get('float', deserialize_json=True))
-        self.assertEqual(True, models.Variable.get('true', deserialize_json=True))
-        self.assertEqual(False, models.Variable.get('false', deserialize_json=True))
-        self.assertEqual(None, models.Variable.get('null', deserialize_json=True))
+        self.assertEqual('original', models.Variable.get('bar'))
+        self.assertEqual('{"foo": "bar"}', models.Variable.get('foo'))
 
         os.remove('variables1.json')
         os.remove('variables2.json')
-        os.remove('variables3.json')
 
     def _wait_pidfile(self, pidfile):
         while True:
@@ -1705,10 +1699,10 @@ class CliTests(unittest.TestCase):
     @mock.patch("airflow.bin.cli.get_num_workers_running", return_value=0)
     def test_cli_webserver_shutdown_when_gunicorn_master_is_killed(self, _):
         # Shorten timeout so that this test doesn't take too long time
+        configuration.conf.set("webserver", "web_server_master_timeout", "10")
         args = self.parser.parse_args(['webserver'])
-        with conf_vars({('webserver', 'web_server_master_timeout'): '10'}):
-            with self.assertRaises(SystemExit) as e:
-                cli.webserver(args)
+        with self.assertRaises(SystemExit) as e:
+            cli.webserver(args)
         self.assertEqual(e.exception.code, 1)
 
 
@@ -1818,12 +1812,6 @@ class WebUiTests(unittest.TestCase):
         self.runme_0 = self.dag_bash.get_task('runme_0')
         self.example_xcom = self.dagbag.dags['example_xcom']
 
-        session = Session()
-        session.query(models.DagRun).delete()
-        session.query(models.TaskInstance).delete()
-        session.commit()
-        session.close()
-
         self.dagrun_python = self.dag_python.create_dagrun(
             run_id="test_{}".format(models.DagRun.id_for_date(timezone.utcnow())),
             execution_date=EXAMPLE_DAG_DEFAULT_DATE,
@@ -1886,7 +1874,7 @@ class WebUiTests(unittest.TestCase):
 
         self.assertEqual('healthy', response_json['metadatabase']['status'])
         self.assertEqual('healthy', response_json['scheduler']['status'])
-        self.assertEqual(last_scheduler_heartbeat_for_testing_1.isoformat(),
+        self.assertEqual(str(last_scheduler_heartbeat_for_testing_1),
                          response_json['scheduler']['latest_scheduler_heartbeat'])
 
         session.query(BJ).\
@@ -1910,7 +1898,7 @@ class WebUiTests(unittest.TestCase):
 
         self.assertEqual('healthy', response_json['metadatabase']['status'])
         self.assertEqual('unhealthy', response_json['scheduler']['status'])
-        self.assertEqual(last_scheduler_heartbeat_for_testing_2.isoformat(),
+        self.assertEqual(str(last_scheduler_heartbeat_for_testing_2),
                          response_json['scheduler']['latest_scheduler_heartbeat'])
 
         session.query(BJ).\
@@ -1931,7 +1919,8 @@ class WebUiTests(unittest.TestCase):
 
         self.assertEqual('healthy', response_json['metadatabase']['status'])
         self.assertEqual('unhealthy', response_json['scheduler']['status'])
-        self.assertIsNone(response_json['scheduler']['latest_scheduler_heartbeat'])
+        self.assertEqual('None',
+                         response_json['scheduler']['latest_scheduler_heartbeat'])
 
         session.close()
 
@@ -2009,10 +1998,10 @@ class WebUiTests(unittest.TestCase):
         response = self.app.post("/admin/airflow/success", data=dict(
             task_id="print_the_context",
             dag_id="example_python_operator",
-            success_upstream="false",
-            success_downstream="false",
-            success_future="false",
-            success_past="false",
+            upstream="false",
+            downstream="false",
+            future="false",
+            past="false",
             execution_date=EXAMPLE_DAG_DEFAULT_DATE,
             origin="/admin"))
         self.assertIn("Wait a minute", response.data.decode('utf-8'))
@@ -2031,10 +2020,10 @@ class WebUiTests(unittest.TestCase):
         form = dict(
             task_id="section-1",
             dag_id="example_subdag_operator",
-            success_upstream="true",
-            success_downstream="true",
-            success_future="false",
-            success_past="false",
+            upstream="true",
+            downstream="true",
+            future="false",
+            past="false",
             execution_date=EXAMPLE_DAG_DEFAULT_DATE,
             origin="/admin")
         response = self.app.post("/admin/airflow/success", data=form)
@@ -2731,8 +2720,8 @@ class EmailTest(unittest.TestCase):
 
     @mock.patch('airflow.utils.email.send_email_smtp')
     def test_custom_backend(self, mock_send_email):
-        with conf_vars({('email', 'EMAIL_BACKEND'): 'tests.core.send_email_test'}):
-            utils.email.send_email('to', 'subject', 'content')
+        configuration.conf.set('email', 'EMAIL_BACKEND', 'tests.core.send_email_test')
+        utils.email.send_email('to', 'subject', 'content')
         send_email_test.assert_called_with(
             'to', 'subject', 'content', files=None, dryrun=False,
             cc=None, bcc=None, mime_charset='us-ascii', mime_subtype='mixed')
@@ -2812,10 +2801,10 @@ class EmailSmtpTest(unittest.TestCase):
     @mock.patch('smtplib.SMTP_SSL')
     @mock.patch('smtplib.SMTP')
     def test_send_mime_ssl(self, mock_smtp, mock_smtp_ssl):
+        configuration.conf.set('smtp', 'SMTP_SSL', 'True')
         mock_smtp.return_value = mock.Mock()
         mock_smtp_ssl.return_value = mock.Mock()
-        with conf_vars({('smtp', 'SMTP_SSL'): 'True'}):
-            utils.email.send_MIME_email('from', 'to', MIMEMultipart(), dryrun=False)
+        utils.email.send_MIME_email('from', 'to', MIMEMultipart(), dryrun=False)
         self.assertFalse(mock_smtp.called)
         mock_smtp_ssl.assert_called_with(
             configuration.conf.get('smtp', 'SMTP_HOST'),
@@ -2825,13 +2814,11 @@ class EmailSmtpTest(unittest.TestCase):
     @mock.patch('smtplib.SMTP_SSL')
     @mock.patch('smtplib.SMTP')
     def test_send_mime_noauth(self, mock_smtp, mock_smtp_ssl):
+        configuration.conf.remove_option('smtp', 'SMTP_USER')
+        configuration.conf.remove_option('smtp', 'SMTP_PASSWORD')
         mock_smtp.return_value = mock.Mock()
         mock_smtp_ssl.return_value = mock.Mock()
-        with conf_vars({
-                ('smtp', 'SMTP_USER'): None,
-                ('smtp', 'SMTP_PASSWORD'): None,
-        }):
-            utils.email.send_MIME_email('from', 'to', MIMEMultipart(), dryrun=False)
+        utils.email.send_MIME_email('from', 'to', MIMEMultipart(), dryrun=False)
         self.assertFalse(mock_smtp_ssl.called)
         mock_smtp.assert_called_with(
             configuration.conf.get('smtp', 'SMTP_HOST'),

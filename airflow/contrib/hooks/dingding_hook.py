@@ -101,7 +101,6 @@ class DingdingHook(HttpHook):
         """
         Overwrite HttpHook get_conn because just need base_url and headers and
         not don't need generic params
-
         :param headers: additional headers to be passed through as a dictionary
         :type headers: dict
         """

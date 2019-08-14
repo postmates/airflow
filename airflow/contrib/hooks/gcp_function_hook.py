@@ -24,6 +24,10 @@ from googleapiclient.discovery import build
 from airflow import AirflowException
 from airflow.contrib.hooks.gcp_api_base_hook import GoogleCloudBaseHook
 
+# Number of retries - used by googleapiclient method calls to perform retries
+# For requests that are "retriable"
+NUM_RETRIES = 5
+
 # Time to sleep between active checks of the operation results
 TIME_TO_SLEEP_IN_SECONDS = 1
 
@@ -44,7 +48,6 @@ class GcfHook(GoogleCloudBaseHook):
                  delegate_to=None):
         super(GcfHook, self).__init__(gcp_conn_id, delegate_to)
         self.api_version = api_version
-        self.num_retries = self._get_field('num_retries', 5)
 
     @staticmethod
     def _full_location(project_id, location):
@@ -83,7 +86,7 @@ class GcfHook(GoogleCloudBaseHook):
         :rtype: dict
         """
         return self.get_conn().projects().locations().functions().get(
-            name=name).execute(num_retries=self.num_retries)
+            name=name).execute(num_retries=NUM_RETRIES)
 
     @GoogleCloudBaseHook.fallback_to_default_project_id
     def create_new_function(self, location, body, project_id=None):
@@ -102,7 +105,7 @@ class GcfHook(GoogleCloudBaseHook):
         response = self.get_conn().projects().locations().functions().create(
             location=self._full_location(project_id, location),
             body=body
-        ).execute(num_retries=self.num_retries)
+        ).execute(num_retries=NUM_RETRIES)
         operation_name = response["name"]
         self._wait_for_operation_to_complete(operation_name=operation_name)
 
@@ -122,7 +125,7 @@ class GcfHook(GoogleCloudBaseHook):
             updateMask=",".join(update_mask),
             name=name,
             body=body
-        ).execute(num_retries=self.num_retries)
+        ).execute(num_retries=NUM_RETRIES)
         operation_name = response["name"]
         self._wait_for_operation_to_complete(operation_name=operation_name)
 
@@ -142,7 +145,7 @@ class GcfHook(GoogleCloudBaseHook):
         """
         response = self.get_conn().projects().locations().functions().generateUploadUrl(
             parent=self._full_location(project_id, location)
-        ).execute(num_retries=self.num_retries)
+        ).execute(num_retries=NUM_RETRIES)
         upload_url = response.get('uploadUrl')
         with open(zip_path, 'rb') as fp:
             requests.put(
@@ -167,7 +170,7 @@ class GcfHook(GoogleCloudBaseHook):
         :return: None
         """
         response = self.get_conn().projects().locations().functions().delete(
-            name=name).execute(num_retries=self.num_retries)
+            name=name).execute(num_retries=NUM_RETRIES)
         operation_name = response["name"]
         self._wait_for_operation_to_complete(operation_name=operation_name)
 
@@ -186,7 +189,7 @@ class GcfHook(GoogleCloudBaseHook):
         while True:
             operation_response = service.operations().get(
                 name=operation_name,
-            ).execute(num_retries=self.num_retries)
+            ).execute(num_retries=NUM_RETRIES)
             if operation_response.get("done"):
                 response = operation_response.get("response")
                 error = operation_response.get("error")

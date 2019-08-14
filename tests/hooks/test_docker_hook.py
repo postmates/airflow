@@ -21,7 +21,7 @@ import unittest
 
 from airflow import configuration
 from airflow.exceptions import AirflowException
-from airflow.models import Connection
+from airflow.models.connection import Connection
 from airflow.utils import db
 from tests.compat import mock
 
@@ -48,8 +48,7 @@ class DockerHookTest(unittest.TestCase):
             Connection(
                 conn_id='docker_with_extras',
                 conn_type='docker',
-                host='another.docker.registry.com',
-                port=9876,
+                host='some.docker.registry.com',
                 login='some_user',
                 password='some_p4$$w0rd',
                 extra='{"email": "some@example.com", "reauth": "no"}'
@@ -135,7 +134,7 @@ class DockerHookTest(unittest.TestCase):
         client.login.assert_called_with(
             username='some_user',
             password='some_p4$$w0rd',
-            registry='another.docker.registry.com:9876',
+            registry='some.docker.registry.com',
             reauth=False,
             email='some@example.com'
         )

@@ -89,11 +89,10 @@ Scopes (comma separated)
     <https://developers.google.com/identity/protocols/googlescopes>`_ to
     authenticate with.
 
-Number of Retries
-    Integer, number of times to retry with randomized
-    exponential backoff. If all retries fail, the :class:`googleapiclient.errors.HttpError`
-    represents the last request. If zero (default), we attempt the
-    request only once.
+    .. note::
+        Scopes are ignored when using application default credentials. See
+        issue `AIRFLOW-2522
+        <https://issues.apache.org/jira/browse/AIRFLOW-2522>`_.
 
     When specifying the connection in environment variable you should specify
     it using URI syntax, with the following requirements:
@@ -108,7 +107,6 @@ Number of Retries
         * ``extra__google_cloud_platform__key_path`` - Keyfile Path
         * ``extra__google_cloud_platform__key_dict`` - Keyfile JSON
         * ``extra__google_cloud_platform__scope`` - Scopes
-        * ``extra__google_cloud_platform__num_retries`` - Number of Retries
 
     Note that all components of the URI should be URL-encoded.
 
@@ -116,4 +114,4 @@ Number of Retries
 
     .. code-block:: bash
 
-       google-cloud-platform://?extra__google_cloud_platform__key_path=%2Fkeys%2Fkey.json&extra__google_cloud_platform__scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&extra__google_cloud_platform__project=airflow&extra__google_cloud_platform__num_retries=5
+       google-cloud-platform://?extra__google_cloud_platform__key_path=%2Fkeys%2Fkey.json&extra__google_cloud_platform__scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&extra__google_cloud_platform__project=airflow

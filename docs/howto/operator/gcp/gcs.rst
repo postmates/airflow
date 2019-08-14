@@ -70,7 +70,7 @@ Using the operator
 Templating
 """"""""""
 
-.. literalinclude:: ../../../../airflow/contrib/operators/gcs_acl_operator.py
+.. exampleinclude:: ../../../../airflow/contrib/operators/gcs_acl_operator.py
     :language: python
     :dedent: 4
     :start-after: [START gcs_bucket_create_acl_template_fields]
@@ -114,7 +114,7 @@ Using the operator
 Templating
 """"""""""
 
-.. literalinclude:: ../../../../airflow/contrib/operators/gcs_acl_operator.py
+.. exampleinclude:: ../../../../airflow/contrib/operators/gcs_acl_operator.py
     :language: python
     :dedent: 4
     :start-after: [START gcs_object_create_acl_template_fields]

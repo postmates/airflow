@@ -69,10 +69,9 @@ class GoogleCloudStorageCreateBucketOperator(BaseOperator):
         have domain-wide delegation enabled.
     :type delegate_to: str
 
+    :Example::
     The following Operator would create a new bucket ``test-bucket``
-    with ``MULTI_REGIONAL`` storage class in ``EU`` region
-
-    .. code-block:: python
+    with ``MULTI_REGIONAL`` storage class in ``EU`` region ::
 
         CreateBucket = GoogleCloudStorageCreateBucketOperator(
             task_id='CreateNewBucket',
@@ -82,7 +81,6 @@ class GoogleCloudStorageCreateBucketOperator(BaseOperator):
             labels={'env': 'dev', 'team': 'airflow'},
             google_cloud_storage_conn_id='airflow-service-account'
         )
-
     """
 
     template_fields = ('bucket_name', 'storage_class',
