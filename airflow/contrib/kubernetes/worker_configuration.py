@@ -166,12 +166,6 @@ class WorkerConfiguration(LoggingMixin):
         for env_var_name, env_var_val in six.iteritems(self.kube_config.kube_env_vars):
             env[env_var_name] = env_var_val
 
-        for env_var_name, env_var_val in six.iteritems(self.kube_config.kubernetes_environment):
-            env_var_key = env_var_name.split('_')[1]
-            if env_var_key in env.keys():
-                raise Exception('{} already exists in env vars'.format(env_var_key))
-            env[env_var_key] = env_var_val
-
         env["AIRFLOW__CORE__EXECUTOR"] = "LocalExecutor"
 
         if self.kube_config.airflow_configmap:
