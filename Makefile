@@ -1,7 +1,7 @@
 # ----------------
 #    Docker
 # ----------------
-IMAGE ?= gcr.io/datafall-prod/airflow
+IMAGE ?= gcr.io/pm-registry/airflow
 TAG ?=  20190829
 
 prod-build:
