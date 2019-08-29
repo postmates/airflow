@@ -22,6 +22,7 @@ from airflow.configuration import conf
 from airflow.contrib.kubernetes.pod import Pod, Resources
 from airflow.contrib.kubernetes.secret import Secret
 from airflow.utils.log.logging_mixin import LoggingMixin
+from collections import defaultdict
 
 
 class WorkerConfiguration(LoggingMixin):
@@ -164,6 +165,12 @@ class WorkerConfiguration(LoggingMixin):
 
         for env_var_name, env_var_val in six.iteritems(self.kube_config.kube_env_vars):
             env[env_var_name] = env_var_val
+
+        for env_var_name, env_var_val in six.iteritems(self.kube_config.kubernetes_environment):
+            env_var_key = env_var_name.split('_')[1]
+            if env_var_key in env.keys():
+                raise Exception('{} already exists in env vars'.format(env_var_key))
+            env[env_var_key] = env_var_val
 
         env["AIRFLOW__CORE__EXECUTOR"] = "LocalExecutor"
 
@@ -328,6 +335,49 @@ class WorkerConfiguration(LoggingMixin):
                 'readOnly': True
             }
 
+        if len(self.kube_config.kubernetes_configmaps) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_configmaps.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                configmap_volume_name = f'{prefix}-configmap'
+                config_path = mount_dic[prefix]['path']
+                configmap_name = mount_dic[prefix]['configmap']
+                volumes[configmap_volume_name] = {
+                    'name': configmap_volume_name,
+                    'configMap': {
+                        'name': configmap_name
+                    }
+                }
+                volume_mounts[configmap_volume_name] = {
+                    'name': configmap_volume_name,
+                    'mountPath': config_path,
+                    'readOnly': True
+                }
+
+        if len(self.kube_config.kubernetes_mounts) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_mounts.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                credential_volume_name = f'{prefix}-secret'
+                config_path = mount_dic[prefix]['path']
+                secret_name = mount_dic[prefix]['secret']
+                volumes[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'secret': {
+                        'secretName': secret_name
+                    }
+                }
+                volume_mounts[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'mountPath': config_path,
+                    'readOnly': True
+                }
+
+
         return volumes, volume_mounts
 
     def generate_dag_volume_mount_path(self):
@@ -343,10 +393,14 @@ class WorkerConfiguration(LoggingMixin):
         volumes_dict, volume_mounts_dict = self._get_volumes_and_mounts()
         worker_init_container_spec = self._get_init_containers()
         resources = Resources(
-            request_memory=kube_executor_config.request_memory,
-            request_cpu=kube_executor_config.request_cpu,
-            limit_memory=kube_executor_config.limit_memory,
-            limit_cpu=kube_executor_config.limit_cpu,
+            request_memory=(kube_executor_config.request_memory or
+                            self.kube_config.kube_worker_resources["request_memory"]),
+            request_cpu=(kube_executor_config.request_cpu or
+                         self.kube_config.kube_worker_resources["request_cpu"]),
+            limit_memory=(kube_executor_config.limit_memory or
+                          self.kube_config.kube_worker_resources["limit_memory"]),
+            limit_cpu=(kube_executor_config.limit_cpu or
+                       self.kube_config.kube_worker_resources["limit_cpu"]),
             limit_gpu=kube_executor_config.limit_gpu
         )
         gcp_sa_key = kube_executor_config.gcp_service_account_key
@@ -368,6 +422,7 @@ class WorkerConfiguration(LoggingMixin):
                                self.kube_config.kube_image_pull_policy),
             cmds=airflow_command,
             labels=self._get_labels(kube_executor_config.labels, {
+                'release': self.kube_config.k8s_release,
                 'airflow-worker': worker_uuid,
                 'dag_id': dag_id,
                 'task_id': task_id,
