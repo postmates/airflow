@@ -131,6 +131,8 @@ class KubeConfig:
     def __init__(self):
         configuration_dict = configuration.as_dict(display_sensitive=True)
         self.core_configuration = configuration_dict['core']
+        self.kubernetes_mounts = configuration_dict['kubernetes_secret_mounts']
+        self.kubernetes_configmaps = configuration_dict['kubernetes_configmap_mounts']
         self.kube_secrets = configuration_dict.get('kubernetes_secrets', {})
         self.kube_env_vars = configuration_dict.get('kubernetes_environment_variables', {})
         self.env_from_configmap_ref = configuration.get(self.kubernetes_section,
@@ -149,6 +151,7 @@ class KubeConfig:
         self.kube_image_pull_policy = configuration.get(
             self.kubernetes_section, "worker_container_image_pull_policy"
         )
+        self.kube_worker_resources = configuration_dict.get('kubernetes_worker_resource_defaults', {})
         self.kube_node_selectors = configuration_dict.get('kubernetes_node_selectors', {})
         self.kube_annotations = configuration_dict.get('kubernetes_annotations', {})
         self.kube_labels = configuration_dict.get('kubernetes_labels', {})
@@ -167,6 +170,8 @@ class KubeConfig:
         # Run as user for pod security context
         self.worker_run_as_user = self._get_security_context_val('run_as_user')
         self.worker_fs_group = self._get_security_context_val('fs_group')
+
+        self.k8s_release = conf.get(self.kubernetes_section, 'k8s_release')
 
         # NOTE: `git_repo` and `git_branch` must be specified together as a pair
         # The http URL of the git repository to clone from
@@ -524,11 +529,13 @@ class AirflowKubernetesScheduler(LoggingMixin):
         :param random_uuid: a uuid
         :return: ``str`` valid Pod name of appropriate length
         """
-        MAX_POD_ID_LEN = 253
+        MAX_POD_ID_LEN = 50
+        MAX_DAG_ID_LEN = 24
+        MAX_TASK_ID_LEN = 25
 
-        safe_key = safe_dag_id + safe_task_id
+        safe_key = safe_dag_id[:MAX_DAG_ID_LEN] + "-" + safe_task_id[:MAX_TASK_ID_LEN]
 
-        safe_pod_id = safe_key[:MAX_POD_ID_LEN - len(safe_uuid) - 1] + "-" + safe_uuid
+        safe_pod_id = safe_key[:MAX_POD_ID_LEN  - 7] + "-" + safe_uuid[:6]
 
         return safe_pod_id
 
