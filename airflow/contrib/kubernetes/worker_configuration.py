@@ -416,7 +416,6 @@ class WorkerConfiguration(LoggingMixin):
                                self.kube_config.kube_image_pull_policy),
             cmds=airflow_command,
             labels=self._get_labels(kube_executor_config.labels, {
-                'release': self.kube_config.k8s_release,
                 'airflow-worker': worker_uuid,
                 'dag_id': dag_id,
                 'task_id': task_id,
