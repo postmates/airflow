@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -36,7 +35,7 @@ TODO: Review the workflow, change it accordingly to
 # from airflow.operators.docker_operator import DockerOperator
 #
 # default_args = {
-#     'owner': 'Airflow',
+#     'owner': 'airflow',
 #     'depends_on_past': False,
 #     'start_date': airflow.utils.dates.days_ago(2),
 #     'email': ['airflow@example.com'],

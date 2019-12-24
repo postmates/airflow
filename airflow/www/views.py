@@ -62,8 +62,7 @@ from wtforms import (
     StringField, IntegerField, validators)
 
 import airflow
-from airflow import LoggingMixin, configuration
-from airflow.configuration import conf
+from airflow import configuration as conf, LoggingMixin, configuration
 from airflow import models
 from airflow import settings
 from airflow import jobs
@@ -73,7 +72,7 @@ from airflow.api.common.experimental.mark_tasks import (set_dag_run_state_to_run
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator, Connection, DagRun, errors, XCom
 from airflow.operators.subdag_operator import SubDagOperator
-from airflow.ti_deps.dep_context import DepContext, SCHEDULER_QUEUED_DEPS
+from airflow.ti_deps.dep_context import DepContext, QUEUE_DEPS, SCHEDULER_DEPS
 from airflow.utils import timezone
 from airflow.utils.dates import infer_time_unit, scale_time_units, parse_execution_date
 from airflow.utils.db import create_session, provide_session
@@ -1008,7 +1007,7 @@ class Airflow(AirflowViewMixin, BaseView):
                        if ti.state == State.NONE else "")))]
 
         # Use the scheduler's context to figure out which dependencies are not met
-        dep_context = DepContext(SCHEDULER_QUEUED_DEPS)
+        dep_context = DepContext(SCHEDULER_DEPS)
         failed_dep_reasons = [(dep.dep_name, dep.reason) for dep in
                               ti.get_failed_dep_statuses(
                                   dep_context=dep_context)]
@@ -1113,7 +1112,7 @@ class Airflow(AirflowViewMixin, BaseView):
 
         # Make sure the task instance can be queued
         dep_context = DepContext(
-            deps=SCHEDULER_QUEUED_DEPS,
+            deps=QUEUE_DEPS,
             ignore_all_deps=ignore_all_deps,
             ignore_task_deps=ignore_task_deps,
             ignore_ti_state=ignore_ti_state)
@@ -1532,14 +1531,14 @@ class Airflow(AirflowViewMixin, BaseView):
         # expand/collapse functionality. After 5,000 nodes we stop and fall
         # back on a quick DFS search for performance. See PR #320.
         node_count = [0]
-        node_limit = 5000 / max(1, len(dag.leaves))
+        node_limit = 5000 / max(1, len(dag.roots))
 
         def recurse_nodes(task, visited):
             visited.add(task)
             node_count[0] += 1
 
             children = [
-                recurse_nodes(t, visited) for t in task.downstream_list
+                recurse_nodes(t, visited) for t in task.upstream_list
                 if node_count[0] < node_limit or t not in visited]
 
             # D3 tree uses children vs _children to define what is
@@ -1567,7 +1566,7 @@ class Airflow(AirflowViewMixin, BaseView):
                     }
                     for d in dates],
                 children_key: children,
-                'num_dep': len(task.downstream_list),
+                'num_dep': len(task.upstream_list),
                 'operator': task.task_type,
                 'retries': task.retries,
                 'owner': task.owner,
@@ -1630,18 +1629,18 @@ class Airflow(AirflowViewMixin, BaseView):
                 }
             })
 
-        def get_downstream(task):
-            for t in task.downstream_list:
+        def get_upstream(task):
+            for t in task.upstream_list:
                 edge = {
-                    'u': task.task_id,
-                    'v': t.task_id,
+                    'u': t.task_id,
+                    'v': task.task_id,
                 }
                 if edge not in edges:
                     edges.append(edge)
-                    get_downstream(t)
+                    get_upstream(t)
 
         for t in dag.roots:
-            get_downstream(t)
+            get_upstream(t)
 
         dt_nr_dr_data = get_date_time_num_runs_dag_runs_form_data(request, session, dag)
         dt_nr_dr_data['arrange'] = arrange
@@ -2315,7 +2314,7 @@ class QueryView(wwwutils.DataProfilingMixin, AirflowViewMixin, BaseView):
         if not has_data and error:
             flash('No data', 'error')
 
-        if csv and not error:
+        if csv:
             return Response(
                 response=df.to_csv(index=False),
                 status=200,
@@ -2659,7 +2658,6 @@ class VariableView(wwwutils.DataProfilingMixin, AirflowModelView):
 
         response = make_response(json.dumps(var_dict, sort_keys=True, indent=4))
         response.headers["Content-Disposition"] = "attachment; filename=variables.json"
-        response.headers["Content-Type"] = "application/json; charset=utf-8"
         return response
 
     def on_form_prefill(self, form, id):
@@ -2697,7 +2695,7 @@ class XComView(wwwutils.SuperUserMixin, AirflowModelView):
     form_overrides = dict(execution_date=DateTimeField)
 
     def on_model_change(self, form, model, is_created):
-        enable_pickling = conf.getboolean('core', 'enable_xcom_pickling')
+        enable_pickling = configuration.getboolean('core', 'enable_xcom_pickling')
         if enable_pickling:
             model.value = pickle.dumps(model.value)
         else:
@@ -3167,9 +3165,9 @@ class ConfigurationView(wwwutils.SuperUserMixin, AirflowViewMixin, BaseView):
     def conf(self):
         raw = request.args.get('raw') == "true"
         title = "Airflow Configuration"
-        subtitle = configuration.AIRFLOW_CONFIG
+        subtitle = conf.AIRFLOW_CONFIG
         if conf.getboolean("webserver", "expose_config"):
-            with open(configuration.AIRFLOW_CONFIG, 'r') as f:
+            with open(conf.AIRFLOW_CONFIG, 'r') as f:
                 config = f.read()
             table = [(section, key, value, source)
                      for section, parameters in conf.as_dict(True, True).items()
@@ -3200,7 +3198,7 @@ class ConfigurationView(wwwutils.SuperUserMixin, AirflowViewMixin, BaseView):
 
 class DagModelView(wwwutils.SuperUserMixin, ModelView):
     column_list = ('dag_id', 'owners')
-    column_editable_list = ('is_paused', 'description', 'default_view')
+    column_editable_list = ('is_paused',)
     form_excluded_columns = ('is_subdag', 'is_active')
     column_searchable_list = ('dag_id',)
     column_filters = (
@@ -3245,15 +3243,3 @@ class DagModelView(wwwutils.SuperUserMixin, ModelView):
             .get_count_query()\
             .filter(models.DagModel.is_active)\
             .filter(~models.DagModel.is_subdag)
-
-    def edit_form(self, obj=None):
-        # Ensure that disabled fields aren't overwritten
-        form = super(DagModelView, self).edit_form(obj)
-
-        if not obj:
-            return obj
-
-        for fld in form:
-            if self.form_widget_args.get(fld.name, {}).get('disabled'):
-                fld.data = getattr(obj, fld.name)
-        return form

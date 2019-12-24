@@ -209,7 +209,8 @@ def initdb(rbac=False):
             extra='{"path": "/"}'))
     merge_conn(
         Connection(
-            conn_id='aws_default', conn_type='aws'))
+            conn_id='aws_default', conn_type='aws',
+            extra='{"region_name": "us-east-1"}'))
     merge_conn(
         Connection(
             conn_id='spark_default', conn_type='spark',

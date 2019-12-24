@@ -29,7 +29,8 @@ function update_nodes_states(task_instances) {
       .parent().parent().parent().parent()
       .attr("class", "node enter " + (ti.state ? ti.state : "no_status"))
       .attr("data-toggle", "tooltip")
-      .on("mouseover", function (d) {
+      .attr("data-original-title", function (d) {
+        // Tooltip
         const task = tasks[task_id];
         let tt = "";
         if(ti.task_id != undefined) {
@@ -43,9 +44,8 @@ function update_nodes_states(task_instances) {
         tt += "Duration: " + escapeHtml(convertSecsToHumanReadable(ti.duration)) + "<br>";
         tt += "Started: " + escapeHtml(ti.start_date) + "<br>";
         tt += generateTooltipDateTime(ti.start_date, ti.end_date, dagTZ); // dagTZ has been defined in dag.html
-        taskTip.show(tt, this); // taskTip is defined in graph.html
-      })
-      .on('mouseout', taskTip.hide);
+        return tt;
+      });
   });
 }
 

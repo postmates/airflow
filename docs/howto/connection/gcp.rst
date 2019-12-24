@@ -28,15 +28,14 @@ The Google Cloud Platform connection type enables the :ref:`GCP Integrations
 Authenticating to GCP
 ---------------------
 
-There are three ways to connect to GCP using Airflow.
+There are two ways to connect to GCP using Airflow.
 
 1. Use `Application Default Credentials
    <https://google-auth.readthedocs.io/en/latest/reference/google.auth.html#google.auth.default>`_,
    such as via the metadata server when running on Google Compute Engine.
 2. Use a `service account
    <https://cloud.google.com/docs/authentication/#service_accounts>`_ key
-   file (JSON format) on disk - ``Keyfile Path``.
-3. Use a service account key file (JSON format) from connection configuration - ``Keyfile JSON``.
+   file (JSON format) on disk.
 
 Default Connection IDs
 ----------------------

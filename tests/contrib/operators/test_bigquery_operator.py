@@ -24,13 +24,12 @@ from datetime import datetime
 
 import six
 
-from airflow import models
+from airflow import configuration, models
 from airflow.contrib.operators.bigquery_get_data import BigQueryGetDataOperator
 from airflow.contrib.operators.bigquery_operator import \
     BigQueryCreateExternalTableOperator, BigQueryCreateEmptyTableOperator, \
     BigQueryDeleteDatasetOperator, BigQueryCreateEmptyDatasetOperator, \
-    BigQueryOperator, BigQueryConsoleLink, BigQueryGetDatasetOperator, \
-    BigQueryPatchDatasetOperator, BigQueryUpdateDatasetOperator
+    BigQueryOperator, BigQueryConsoleLink
 from airflow.contrib.operators.bigquery_table_delete_operator import \
     BigQueryTableDeleteOperator
 from airflow.contrib.operators.bigquery_to_bigquery import \
@@ -44,7 +43,6 @@ from tests.compat import mock
 TASK_ID = 'test-bq-create-table-operator'
 TEST_DATASET = 'test-dataset'
 TEST_GCP_PROJECT_ID = 'test-project'
-TEST_DELETE_CONTENTS = True
 TEST_TABLE_ID = 'test-table-id'
 TEST_GCS_BUCKET = 'test-bucket'
 TEST_GCS_DATA = ['dir1/*.csv']
@@ -125,8 +123,7 @@ class BigQueryDeleteDatasetOperatorTest(unittest.TestCase):
         operator = BigQueryDeleteDatasetOperator(
             task_id=TASK_ID,
             dataset_id=TEST_DATASET,
-            project_id=TEST_GCP_PROJECT_ID,
-            delete_contents=TEST_DELETE_CONTENTS
+            project_id=TEST_GCP_PROJECT_ID
         )
 
         operator.execute(None)
@@ -136,8 +133,7 @@ class BigQueryDeleteDatasetOperatorTest(unittest.TestCase):
             .delete_dataset \
             .assert_called_once_with(
                 dataset_id=TEST_DATASET,
-                project_id=TEST_GCP_PROJECT_ID,
-                delete_contents=TEST_DELETE_CONTENTS
+                project_id=TEST_GCP_PROJECT_ID
             )
 
 
@@ -162,72 +158,6 @@ class BigQueryCreateEmptyDatasetOperatorTest(unittest.TestCase):
             )
 
 
-class BigQueryGetDatasetOperatorTest(unittest.TestCase):
-    @mock.patch('airflow.contrib.operators.bigquery_operator.BigQueryHook')
-    def test_execute(self, mock_hook):
-        operator = BigQueryGetDatasetOperator(
-            task_id=TASK_ID,
-            dataset_id=TEST_DATASET,
-            project_id=TEST_GCP_PROJECT_ID
-        )
-
-        operator.execute(None)
-        mock_hook.return_value \
-            .get_conn.return_value \
-            .cursor.return_value \
-            .get_dataset \
-            .assert_called_once_with(
-                dataset_id=TEST_DATASET,
-                project_id=TEST_GCP_PROJECT_ID
-            )
-
-
-class BigQueryPatchDatasetOperatorTest(unittest.TestCase):
-    @mock.patch('airflow.contrib.operators.bigquery_operator.BigQueryHook')
-    def test_execute(self, mock_hook):
-        dataset_resource = {"friendlyName": 'Test DS'}
-        operator = BigQueryPatchDatasetOperator(
-            dataset_resource=dataset_resource,
-            task_id=TASK_ID,
-            dataset_id=TEST_DATASET,
-            project_id=TEST_GCP_PROJECT_ID
-        )
-
-        operator.execute(None)
-        mock_hook.return_value \
-            .get_conn.return_value \
-            .cursor.return_value \
-            .patch_dataset \
-            .assert_called_once_with(
-                dataset_resource=dataset_resource,
-                dataset_id=TEST_DATASET,
-                project_id=TEST_GCP_PROJECT_ID
-            )
-
-
-class BigQueryUpdateDatasetOperatorTest(unittest.TestCase):
-    @mock.patch('airflow.contrib.operators.bigquery_operator.BigQueryHook')
-    def test_execute(self, mock_hook):
-        dataset_resource = {"friendlyName": 'Test DS'}
-        operator = BigQueryUpdateDatasetOperator(
-            dataset_resource=dataset_resource,
-            task_id=TASK_ID,
-            dataset_id=TEST_DATASET,
-            project_id=TEST_GCP_PROJECT_ID
-        )
-
-        operator.execute(None)
-        mock_hook.return_value \
-            .get_conn.return_value \
-            .cursor.return_value \
-            .update_dataset \
-            .assert_called_once_with(
-                dataset_resource=dataset_resource,
-                dataset_id=TEST_DATASET,
-                project_id=TEST_GCP_PROJECT_ID
-            )
-
-
 class BigQueryOperatorTest(unittest.TestCase):
     def test_bql_deprecation_warning(self):
         with warnings.catch_warnings(record=True) as w:
@@ -240,6 +170,7 @@ class BigQueryOperatorTest(unittest.TestCase):
             w[0].message.args[0])
 
     def setUp(self):
+        configuration.conf.load_test_config()
         self.dagbag = models.DagBag(
             dag_folder='/dev/null', include_examples=True)
         self.args = {'owner': 'airflow', 'start_date': DEFAULT_DATE}
@@ -409,12 +340,11 @@ class BigQueryOperatorTest(unittest.TestCase):
 
     @mock.patch('airflow.contrib.operators.bigquery_operator.BigQueryHook')
     def test_bigquery_operator_defaults(self, mock_hook):
+
         operator = BigQueryOperator(
             task_id=TASK_ID,
             sql='Select * from test_table',
-            dag=self.dag,
-            default_args=self.args,
-            schema_update_options=None
+            dag=self.dag, default_args=self.args
         )
 
         operator.execute(MagicMock())
@@ -432,7 +362,7 @@ class BigQueryOperatorTest(unittest.TestCase):
                 maximum_billing_tier=None,
                 maximum_bytes_billed=None,
                 create_disposition='CREATE_IF_NEEDED',
-                schema_update_options=None,
+                schema_update_options=(),
                 query_params=None,
                 labels=None,
                 priority='INTERACTIVE',

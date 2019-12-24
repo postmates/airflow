@@ -32,7 +32,6 @@ CHANGELOG.txt
 .*html
 _build/*
 _static/*
-_images/*
 .buildinfo
 searchindex.js
 

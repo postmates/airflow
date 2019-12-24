@@ -76,8 +76,6 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
     :type keytab: str
     :param principal: The name of the kerberos principal used for keytab
     :type principal: str
-    :param proxy_user: User to impersonate when submitting the application
-    :type proxy_user: str
     :param name: Name of the job (default airflow-spark)
     :type name: str
     :param num_executors: Number of executors to launch
@@ -111,7 +109,6 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
                  driver_memory=None,
                  keytab=None,
                  principal=None,
-                 proxy_user=None,
                  name='default-name',
                  num_executors=None,
                  application_args=None,
@@ -135,7 +132,6 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
         self._driver_memory = driver_memory
         self._keytab = keytab
         self._principal = principal
-        self._proxy_user = proxy_user
         self._name = name
         self._num_executors = num_executors
         self._application_args = application_args
@@ -279,8 +275,6 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
             connection_cmd += ["--keytab", self._keytab]
         if self._principal:
             connection_cmd += ["--principal", self._principal]
-        if self._proxy_user:
-            connection_cmd += ["--proxy-user", self._proxy_user]
         if self._name:
             connection_cmd += ["--name", self._name]
         if self._java_class:
@@ -578,12 +572,11 @@ class SparkSubmitHook(BaseHook, LoggingMixin):
 
                 # Currently only instantiate Kubernetes client for killing a spark pod.
                 try:
-                    import kubernetes
                     client = kube_client.get_kube_client()
                     api_response = client.delete_namespaced_pod(
                         self._kubernetes_driver_pod,
                         self._connection['namespace'],
-                        body=kubernetes.client.V1DeleteOptions(),
+                        body=client.V1DeleteOptions(),
                         pretty=True)
 
                     self.log.info("Spark on K8s killed with response: %s", api_response)

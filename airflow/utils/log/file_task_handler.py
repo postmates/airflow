@@ -16,14 +16,12 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""File logging handler for tasks."""
+
 import logging
 import os
-from typing import Optional
-
 import requests
 
-from airflow.configuration import conf
+from airflow import configuration as conf
 from airflow.configuration import AirflowConfigException
 from airflow.utils.file import mkdirs
 from airflow.utils.helpers import parse_template_string
@@ -35,12 +33,15 @@ class FileTaskHandler(logging.Handler):
     task instance logs. It creates and delegates log handling
     to `logging.FileHandler` after receiving task instance context.
     It reads logs from task instance's host machine.
-    :param base_log_folder: Base log folder to place logs.
-    :param filename_template: template filename string
     """
+
     def __init__(self, base_log_folder, filename_template):
+        """
+        :param base_log_folder: Base log folder to place logs.
+        :param filename_template: template filename string
+        """
         super(FileTaskHandler, self).__init__()
-        self.handler = None  # type: Optional[logging.FileHandler]
+        self.handler = None
         self.local_base = base_log_folder
         self.filename_template, self.filename_jinja_template = \
             parse_template_string(filename_template)
@@ -48,25 +49,23 @@ class FileTaskHandler(logging.Handler):
     def set_context(self, ti):
         """
         Provide task_instance context to airflow task handler.
-
         :param ti: task instance object
         """
         local_loc = self._init_file(ti)
         self.handler = logging.FileHandler(local_loc)
-        if self.formatter:
-            self.handler.setFormatter(self.formatter)
+        self.handler.setFormatter(self.formatter)
         self.handler.setLevel(self.level)
 
     def emit(self, record):
-        if self.handler:
+        if self.handler is not None:
             self.handler.emit(record)
 
     def flush(self):
-        if self.handler:
+        if self.handler is not None:
             self.handler.flush()
 
     def close(self):
-        if self.handler:
+        if self.handler is not None:
             self.handler.close()
 
     def _render_filename(self, ti, try_number):
@@ -100,9 +99,9 @@ class FileTaskHandler(logging.Handler):
 
         if os.path.exists(location):
             try:
-                with open(location) as file:
+                with open(location) as f:
                     log += "*** Reading local file: {}\n".format(location)
-                    log += "".join(file.readlines())
+                    log += "".join(f.readlines())
             except Exception as e:
                 log = "*** Failed to load local log file: {}\n".format(location)
                 log += "*** {}\n".format(str(e))
@@ -160,13 +159,13 @@ class FileTaskHandler(logging.Handler):
             try_numbers = [try_number]
 
         logs = [''] * len(try_numbers)
-        metadata_array = [{}] * len(try_numbers)
-        for i, try_number_element in enumerate(try_numbers):
-            log, metadata = self._read(task_instance, try_number_element, metadata)
+        metadatas = [{}] * len(try_numbers)
+        for i, try_number in enumerate(try_numbers):
+            log, metadata = self._read(task_instance, try_number, metadata)
             logs[i] += log
-            metadata_array[i] = metadata
+            metadatas[i] = metadata
 
-        return logs, metadata_array
+        return logs, metadatas
 
     def _init_file(self, ti):
         """

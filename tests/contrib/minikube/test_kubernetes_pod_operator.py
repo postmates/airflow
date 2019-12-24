@@ -42,8 +42,7 @@ except Exception as e:
         )
 
 
-# pylint: disable=unused-argument
-class TestKubernetesPodOperator(unittest.TestCase):
+class KubernetesPodOperatorTest(unittest.TestCase):
 
     @staticmethod
     def test_config_path_move():

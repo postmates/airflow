@@ -16,15 +16,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This module contains Google Cloud Vision operators.
-"""
-
 from google.protobuf.json_format import MessageToDict
-from google.cloud.videointelligence_v1 import enums
 
 from airflow.contrib.hooks.gcp_video_intelligence_hook import CloudVideoIntelligenceHook
 from airflow.models import BaseOperator
+from google.cloud.videointelligence_v1 import enums
 
 
 class CloudVideoIntelligenceDetectVideoLabelsOperator(BaseOperator):
@@ -55,13 +51,11 @@ class CloudVideoIntelligenceDetectVideoLabelsOperator(BaseOperator):
     :param retry: Retry object used to determine when/if to retry requests.
         If None is specified, requests will not be retried.
     :type retry: google.api_core.retry.Retry
-    :param timeout: Optional, The amount of time, in seconds, to wait for the request to complete.
-        Note that if retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud
         Platform. Defaults to ``google_cloud_default``.
     :type gcp_conn_id: str
     """
+
     # [START gcp_video_intelligence_detect_labels_template_fields]
     template_fields = ("input_uri", "output_uri", "gcp_conn_id")
     # [END gcp_video_intelligence_detect_labels_template_fields]
@@ -74,7 +68,6 @@ class CloudVideoIntelligenceDetectVideoLabelsOperator(BaseOperator):
         video_context=None,
         location=None,
         retry=None,
-        timeout=None,
         gcp_conn_id="google_cloud_default",
         *args,
         **kwargs
@@ -87,7 +80,6 @@ class CloudVideoIntelligenceDetectVideoLabelsOperator(BaseOperator):
         self.location = location
         self.retry = retry
         self.gcp_conn_id = gcp_conn_id
-        self.timeout = timeout
 
     def execute(self, context):
         hook = CloudVideoIntelligenceHook(gcp_conn_id=self.gcp_conn_id)
@@ -98,7 +90,6 @@ class CloudVideoIntelligenceDetectVideoLabelsOperator(BaseOperator):
             location=self.location,
             retry=self.retry,
             features=[enums.Feature.LABEL_DETECTION],
-            timeout=self.timeout
         )
         self.log.info("Processing video for label annotations")
         result = MessageToDict(operation.result())
@@ -134,13 +125,11 @@ class CloudVideoIntelligenceDetectVideoExplicitContentOperator(BaseOperator):
     :param retry: Retry object used to determine when/if to retry requests.
         If None is specified, requests will not be retried.
     :type retry: google.api_core.retry.Retry
-    :param timeout: Optional, The amount of time, in seconds, to wait for the request to complete.
-        Note that if retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud
         Platform. Defaults to ``google_cloud_default``.
     :type gcp_conn_id: str
     """
+
     # [START gcp_video_intelligence_detect_explicit_content_template_fields]
     template_fields = ("input_uri", "output_uri", "gcp_conn_id")
     # [END gcp_video_intelligence_detect_explicit_content_template_fields]
@@ -153,7 +142,6 @@ class CloudVideoIntelligenceDetectVideoExplicitContentOperator(BaseOperator):
         video_context=None,
         location=None,
         retry=None,
-        timeout=None,
         gcp_conn_id="google_cloud_default",
         *args,
         **kwargs
@@ -166,7 +154,6 @@ class CloudVideoIntelligenceDetectVideoExplicitContentOperator(BaseOperator):
         self.location = location
         self.retry = retry
         self.gcp_conn_id = gcp_conn_id
-        self.timeout = timeout
 
     def execute(self, context):
         hook = CloudVideoIntelligenceHook(gcp_conn_id=self.gcp_conn_id)
@@ -177,7 +164,6 @@ class CloudVideoIntelligenceDetectVideoExplicitContentOperator(BaseOperator):
             location=self.location,
             retry=self.retry,
             features=[enums.Feature.EXPLICIT_CONTENT_DETECTION],
-            timeout=self.timeout
         )
         self.log.info("Processing video for explicit content annotations")
         result = MessageToDict(operation.result())
@@ -213,13 +199,11 @@ class CloudVideoIntelligenceDetectVideoShotsOperator(BaseOperator):
     :param retry: Retry object used to determine when/if to retry requests.
         If None is specified, requests will not be retried.
     :type retry: google.api_core.retry.Retry
-    :param timeout: Optional, The amount of time, in seconds, to wait for the request to complete.
-        Note that if retry is specified, the timeout applies to each individual attempt.
-    :type timeout: float
     :param gcp_conn_id: Optional, The connection ID used to connect to Google Cloud
         Platform. Defaults to ``google_cloud_default``.
     :type gcp_conn_id: str
     """
+
     # [START gcp_video_intelligence_detect_video_shots_template_fields]
     template_fields = ("input_uri", "output_uri", "gcp_conn_id")
     # [END gcp_video_intelligence_detect_video_shots_template_fields]
@@ -232,7 +216,6 @@ class CloudVideoIntelligenceDetectVideoShotsOperator(BaseOperator):
         video_context=None,
         location=None,
         retry=None,
-        timeout=None,
         gcp_conn_id="google_cloud_default",
         *args,
         **kwargs
@@ -245,7 +228,6 @@ class CloudVideoIntelligenceDetectVideoShotsOperator(BaseOperator):
         self.location = location
         self.retry = retry
         self.gcp_conn_id = gcp_conn_id
-        self.timeout = timeout
 
     def execute(self, context):
         hook = CloudVideoIntelligenceHook(gcp_conn_id=self.gcp_conn_id)
@@ -256,7 +238,6 @@ class CloudVideoIntelligenceDetectVideoShotsOperator(BaseOperator):
             location=self.location,
             retry=self.retry,
             features=[enums.Feature.SHOT_CHANGE_DETECTION],
-            timeout=self.timeout
         )
         self.log.info("Processing video for video shots annotations")
         result = MessageToDict(operation.result())

@@ -22,12 +22,12 @@ from collections import OrderedDict
 
 # To avoid circular imports
 import airflow.utils.dag_processing
-from airflow.configuration import conf
+from airflow import configuration
 from airflow.settings import Stats
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.state import State
 
-PARALLELISM = conf.getint('core', 'PARALLELISM')
+PARALLELISM = configuration.conf.getint('core', 'PARALLELISM')
 
 
 class BaseExecutor(LoggingMixin):

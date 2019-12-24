@@ -17,24 +17,24 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-"""Qubole hook"""
+
 import os
 import time
 import datetime
 import six
 import re
 
+from airflow.exceptions import AirflowException
+from airflow.hooks.base_hook import BaseHook
+from airflow import configuration
+from airflow.utils.log.logging_mixin import LoggingMixin
+from airflow.utils.state import State
+from airflow.models import TaskInstance
+
 from qds_sdk.qubole import Qubole
 from qds_sdk.commands import Command, HiveCommand, PrestoCommand, HadoopCommand, \
     PigCommand, ShellCommand, SparkCommand, DbTapQueryCommand, DbExportCommand, \
     DbImportCommand, SqlCommand
-
-from airflow.exceptions import AirflowException
-from airflow.hooks.base_hook import BaseHook
-from airflow.configuration import conf, mkdir_p
-from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.utils.state import State
-from airflow.models import TaskInstance
 
 COMMAND_CLASSES = {
     "hivecmd": HiveCommand,
@@ -57,24 +57,20 @@ POSITIONAL_ARGS = {
 
 
 def flatten_list(list_of_lists):
-    """Flatten the list"""
     return [element for array in list_of_lists for element in array]
 
 
 def filter_options(options):
-    """Remove options from the list"""
     options_to_remove = ["help", "print-logs-live", "print-logs"]
     return [option for option in options if option not in options_to_remove]
 
 
 def get_options_list(command_class):
-    """Get options list"""
     options_list = [option.get_opt_string().strip("--") for option in command_class.optparser.option_list]
     return filter_options(options_list)
 
 
 def build_command_args():
-    """Build Command argument from command and options"""
     command_args, hyphen_args = {}, set()
     for cmd in COMMAND_CLASSES:
 
@@ -99,8 +95,7 @@ COMMAND_ARGS, HYPHEN_ARGS = build_command_args()
 
 
 class QuboleHook(BaseHook):
-    """Hook for Qubole communication"""
-    def __init__(self, *args, **kwargs):  # pylint: disable=unused-argument
+    def __init__(self, *args, **kwargs):
         conn = self.get_connection(kwargs['qubole_conn_id'])
         Qubole.configure(api_token=conn.password, api_url=conn.host)
         self.task_id = kwargs['task_id']
@@ -112,7 +107,6 @@ class QuboleHook(BaseHook):
 
     @staticmethod
     def handle_failure_retry(context):
-        """Handle retries in case of failures"""
         ti = context['ti']
         cmd_id = ti.xcom_pull(key='qbol_cmd_id', task_ids=ti.task_id)
 
@@ -129,7 +123,6 @@ class QuboleHook(BaseHook):
                     cmd.cancel()
 
     def execute(self, context):
-        """Execute call"""
         args = self.cls.parse(self.create_cmd_args(context))
         self.cmd = self.cls.create(**args)
         self.task_instance = context['task_instance']
@@ -181,10 +174,10 @@ class QuboleHook(BaseHook):
         if fp is None:
             iso = datetime.datetime.utcnow().isoformat()
             logpath = os.path.expanduser(
-                conf.get('core', 'BASE_LOG_FOLDER')
+                configuration.conf.get('core', 'BASE_LOG_FOLDER')
             )
             resultpath = logpath + '/' + self.dag_id + '/' + self.task_id + '/results'
-            mkdir_p(resultpath)
+            configuration.mkdir_p(resultpath)
             fp = open(resultpath + '/' + iso, 'wb')
 
         if self.cmd is None:
@@ -204,7 +197,7 @@ class QuboleHook(BaseHook):
         """
         if self.cmd is None:
             cmd_id = ti.xcom_pull(key="qbol_cmd_id", task_ids=self.task_id)
-        Command.get_log_id(cmd_id)
+        Command.get_log_id(self.cls, cmd_id)
 
     def get_jobs_id(self, ti):
         """
@@ -214,7 +207,7 @@ class QuboleHook(BaseHook):
         """
         if self.cmd is None:
             cmd_id = ti.xcom_pull(key="qbol_cmd_id", task_ids=self.task_id)
-        Command.get_jobs_id(cmd_id)
+        Command.get_jobs_id(self.cls, cmd_id)
 
     def get_extra_links(self, operator, dttm):
         """
@@ -236,7 +229,6 @@ class QuboleHook(BaseHook):
         return url
 
     def create_cmd_args(self, context):
-        """Creates command arguments"""
         args = []
         cmd_type = self.kwargs['command_type']
         inplace_args = None
@@ -255,18 +247,10 @@ class QuboleHook(BaseHook):
                     elif isinstance(v, (list, tuple)):
                         for val in v:
                             tags.add(val)
-        for key, value in self.kwargs.items():
-            if key in COMMAND_ARGS[cmd_type]:
-                if key in HYPHEN_ARGS:
-                    args.append("--{0}={1}".format(key.replace('_', '-'), value))
-                elif key in positional_args_list:
-                    inplace_args = value
-                elif key == 'tags':
-                    self._add_tags(tags, value)
                 else:
-                    args.append("--{0}={1}".format(key, value))
+                    args.append("--{0}={1}".format(k, v))
 
-            if key == 'notify' and value is True:
+            if k == 'notify' and v is True:
                 args.append("--notify")
 
         args.append("--tags={0}".format(','.join(filter(None, tags))))
@@ -275,10 +259,3 @@ class QuboleHook(BaseHook):
             args += inplace_args.split(' ')
 
         return args
-
-    @staticmethod
-    def _add_tags(tags, value):
-        if isinstance(value, six.string_types):
-            tags.add(value)
-        elif isinstance(value, (list, tuple)):
-            tags.extend(value)

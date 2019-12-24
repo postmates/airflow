@@ -94,7 +94,6 @@
 
 <script src="{{ url_for_asset('d3.min.js') }}"></script>
 <script src="{{ url_for_asset('dagre-d3.min.js') }}"></script>
-<script src="{{ url_for_asset('d3-tip.js') }}"></script>
 <script>
 
     var highlight_color = "#000000";
@@ -126,11 +125,6 @@
         'queued': false,
         'no_status': false
     };
-    const taskTip = d3.tip()
-      .attr('class', 'tooltip d3-tip')
-      .html(function(toolTipHtml) {
-        return toolTipHtml;
-      });
 
     // Preparation of DagreD3 data structures
     var g = new dagreD3.graphlib.Graph().setGraph({
@@ -147,7 +141,7 @@
 
     // Set edges
     edges.forEach(function(edge) {
-      g.setEdge(edge.source_id, edge.target_id)
+      g.setEdge(edge.u, edge.v)
     });
 
     var render = dagreD3.render(),
@@ -155,7 +149,6 @@
       innerSvg = d3.select("svg g");
 
     innerSvg.call(render, g);
-    innerSvg.call(taskTip);
 
     function setUpZoomSupport() {
       // Set up zoom support for Graph
@@ -210,6 +203,11 @@
     {% if blur %}
     d3.selectAll("text").attr("class", "blur");
     {% endif %}
+
+    $("g.node").tooltip({
+      html: true,
+      container: "body",
+    });
 
     d3.selectAll("div.legend_item.state")
         .style("cursor", "pointer")
