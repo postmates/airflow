@@ -64,19 +64,19 @@ class TestValueCheckOperator(unittest.TestCase):
         pass_value_str = "2018-03-22"
         operator = self._construct_operator('select date from tab1;', "{{ ds }}")
 
-        operator.render_template_fields({'ds': pass_value_str})
+        result = operator.render_template('pass_value', operator.pass_value, {'ds': pass_value_str})
 
         self.assertEqual(operator.task_id, self.task_id)
-        self.assertEqual(operator.pass_value, pass_value_str)
+        self.assertEqual(result, pass_value_str)
 
     def test_pass_value_template_string_float(self):
         pass_value_float = 4.0
         operator = self._construct_operator('select date from tab1;', pass_value_float)
 
-        operator.render_template_fields({})
+        result = operator.render_template('pass_value', operator.pass_value, {})
 
         self.assertEqual(operator.task_id, self.task_id)
-        self.assertEqual(operator.pass_value, str(pass_value_float))
+        self.assertEqual(result, str(pass_value_float))
 
     @mock.patch.object(ValueCheckOperator, 'get_db_hook')
     def test_execute_pass(self, mock_get_db_hook):

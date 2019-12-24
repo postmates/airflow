@@ -33,5 +33,4 @@ information.
     bash
     dingding
     gcp/index
-    papermill
     python

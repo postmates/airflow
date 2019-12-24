@@ -20,20 +20,18 @@
 import os
 import shutil
 import unittest
-import logging
 
 import elasticsearch
 import mock
 import pendulum
 
+from airflow import configuration
 from airflow.models import TaskInstance, DAG
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.utils import timezone
 from airflow.utils.log.es_task_handler import ElasticsearchTaskHandler
 from airflow.utils.state import State
 from airflow.utils.timezone import datetime
-from airflow.configuration import conf
-
 from .elasticmock import elasticmock
 
 
@@ -73,6 +71,7 @@ class TestElasticsearchTaskHandler(unittest.TestCase):
         self.es.index(index=self.index_name, doc_type=self.doc_type,
                       body=self.body, id=1)
 
+        configuration.load_test_config()
         self.dag = DAG(self.DAG_ID, start_date=self.EXECUTION_DATE)
         task = DummyOperator(task_id=self.TASK_ID, dag=self.dag)
         self.ti = TaskInstance(task=task, execution_date=self.EXECUTION_DATE)
@@ -85,25 +84,6 @@ class TestElasticsearchTaskHandler(unittest.TestCase):
 
     def test_client(self):
         self.assertIsInstance(self.es_task_handler.client, elasticsearch.Elasticsearch)
-
-    def test_client_with_config(self):
-        es_conf = dict(conf.getsection("elasticsearch_configs"))
-        expected_dict = {
-            "use_ssl": False,
-            "verify_certs": True,
-        }
-        self.assertDictEqual(es_conf, expected_dict)
-        # ensure creating with configs does not fail
-        ElasticsearchTaskHandler(
-            self.local_log_location,
-            self.filename_template,
-            self.log_id_template,
-            self.end_of_log_mark,
-            self.write_stdout,
-            self.json_format,
-            self.json_fields,
-            es_conf
-        )
 
     def test_read(self):
         ts = pendulum.now()
@@ -261,19 +241,12 @@ class TestElasticsearchTaskHandler(unittest.TestCase):
         self.es_task_handler.set_context(self.ti)
 
     def test_close(self):
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        self.es_task_handler.formatter = formatter
-
         self.es_task_handler.set_context(self.ti)
         self.es_task_handler.close()
         with open(os.path.join(self.local_log_location,
                                self.filename_template.format(try_number=1)),
                   'r') as log_file:
-            # end_of_log_mark may contain characters like '\n' which is needed to
-            # have the log uploaded but will not be stored in elasticsearch.
-            # so apply the strip() to log_file.read()
-            log_line = log_file.read().strip()
-            self.assertEqual(self.end_of_log_mark.strip(), log_line)
+            self.assertIn(self.end_of_log_mark, log_file.read())
         self.assertTrue(self.es_task_handler.closed)
 
     def test_close_no_mark_end(self):

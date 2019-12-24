@@ -19,7 +19,7 @@
 
 import unittest
 
-from airflow.configuration import conf
+from airflow import configuration
 from airflow import models
 from airflow.contrib.operators.s3_to_sftp_operator import S3ToSFTPOperator
 from airflow.contrib.operators.ssh_operator import SSHOperator
@@ -60,6 +60,7 @@ reset()
 class S3ToSFTPOperatorTest(unittest.TestCase):
     @mock_s3
     def setUp(self):
+        configuration.load_test_config()
         from airflow.contrib.hooks.ssh_hook import SSHHook
         from airflow.hooks.S3_hook import S3Hook
 
@@ -88,7 +89,7 @@ class S3ToSFTPOperatorTest(unittest.TestCase):
     @mock_s3
     def test_s3_to_sftp_operation(self):
         # Setting
-        conf.set("core", "enable_xcom_pickling", "True")
+        configuration.conf.set("core", "enable_xcom_pickling", "True")
         test_remote_file_content = \
             "This is remote file content \n which is also multiline " \
             "another line here \n this is last line. EOF"

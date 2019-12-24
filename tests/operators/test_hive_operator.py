@@ -25,9 +25,9 @@ import unittest
 from tests.compat import mock
 import nose
 
-from airflow import DAG
-from airflow.configuration import conf
+from airflow import DAG, configuration
 import airflow.operators.hive_operator
+configuration.load_test_config()
 
 
 DEFAULT_DATE = datetime.datetime(2015, 1, 1)
@@ -38,6 +38,7 @@ DEFAULT_DATE_DS = DEFAULT_DATE_ISO[:10]
 class HiveEnvironmentTest(unittest.TestCase):
 
     def setUp(self):
+        configuration.load_test_config()
         args = {'owner': 'airflow', 'start_date': DEFAULT_DATE}
         dag = DAG('test_dag_id', default_args=args)
         self.dag = dag
@@ -60,6 +61,7 @@ class HiveEnvironmentTest(unittest.TestCase):
 class HiveCliTest(unittest.TestCase):
 
     def setUp(self):
+        configuration.load_test_config()
         self.nondefault_schema = "nondefault"
         os.environ["AIRFLOW__CORE__SECURITY"] = "kerberos"
 
@@ -93,7 +95,7 @@ class HiveOperatorConfigTest(HiveEnvironmentTest):
             dag=self.dag)
 
         # just check that the correct default value in test_default.cfg is used
-        test_config_hive_mapred_queue = conf.get(
+        test_config_hive_mapred_queue = configuration.conf.get(
             'hive',
             'default_hive_mapred_queue'
         )

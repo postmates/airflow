@@ -22,11 +22,10 @@ from copy import deepcopy
 from datetime import date, time
 from typing import Dict
 
-from freezegun import freeze_time
 from parameterized import parameterized
 from botocore.credentials import Credentials
 
-from airflow import AirflowException
+from airflow import AirflowException, configuration
 from airflow.contrib.hooks.gcp_transfer_hook import (
     FILTER_JOB_NAMES,
     SCHEDULE_START_DATE,
@@ -185,17 +184,6 @@ class TransferJobPreprocessorTest(unittest.TestCase):
         TransferJobPreprocessor(body=body).process_body()
         self.assertEqual(body[SCHEDULE][START_TIME_OF_DAY], DICT_TIME)
 
-    @freeze_time("2018-10-15")
-    def test_should_set_default_schedule(self):
-        body = {}
-        TransferJobPreprocessor(body=body, default_schedule=True).process_body()
-        self.assertEqual(body, {
-            SCHEDULE: {
-                SCHEDULE_END_DATE: {'day': 15, 'month': 10, 'year': 2018},
-                SCHEDULE_START_DATE: {'day': 15, 'month': 10, 'year': 2018}
-            }
-        })
-
 
 class TransferJobValidatorTest(unittest.TestCase):
     def test_should_raise_exception_when_encounters_aws_credentials(self):
@@ -301,6 +289,7 @@ class GcpStorageTransferJobCreateOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         self.dag = DAG(dag_id, default_args={'start_date': DEFAULT_DATE})
         op = GcpTransferServiceJobCreateOperator(
             body={"description": "{{ dag.dag_id }}"},
@@ -335,6 +324,7 @@ class GcpStorageTransferJobUpdateOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GcpTransferServiceJobUpdateOperator(
@@ -367,6 +357,7 @@ class GcpStorageTransferJobDeleteOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_job_delete_with_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GcpTransferServiceJobDeleteOperator(
@@ -408,6 +399,7 @@ class GpcStorageTransferOperationsGetOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_operation_get_with_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GcpTransferServiceOperationGetOperator(
@@ -443,6 +435,7 @@ class GcpStorageTransferOperationListOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GcpTransferServiceOperationsListOperator(
@@ -471,6 +464,7 @@ class GcpStorageTransferOperationsPauseOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_operation_pause_with_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GcpTransferServiceOperationPauseOperator(
@@ -513,6 +507,7 @@ class GcpStorageTransferOperationsResumeOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_operation_resume_with_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GcpTransferServiceOperationResumeOperator(
@@ -555,6 +550,7 @@ class GcpStorageTransferOperationsCancelOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_operation_cancel_with_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GcpTransferServiceOperationCancelOperator(
@@ -604,6 +600,7 @@ class S3ToGoogleCloudStorageTransferOperatorTest(unittest.TestCase):
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = S3ToGoogleCloudStorageTransferOperator(
@@ -695,6 +692,7 @@ class GoogleCloudStorageToGoogleCloudStorageTransferOperatorTest(unittest.TestCa
     @mock.patch('airflow.contrib.operators.gcp_transfer_operator.GCPTransferServiceHook')
     def test_templates(self, _):
         dag_id = 'test_dag_id'
+        configuration.load_test_config()
         args = {'start_date': DEFAULT_DATE}
         self.dag = DAG(dag_id, default_args=args)
         op = GoogleCloudStorageToGoogleCloudStorageTransferOperator(

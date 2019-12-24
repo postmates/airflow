@@ -17,12 +17,6 @@
 ---
 version: "2.2"
 services:
-  mysql:
-    ports:
-      - "${MYSQL_HOST_PORT}:3306"
-  postgres:
-    ports:
-      - "${POSTGRES_HOST_PORT}:5432"
   airflow-testing:
     # We need to mount files an directories individually because some files
     # such apache_airflow.egg-info should not be mounted from host
@@ -45,16 +39,18 @@ services:
       - ../../NOTICE:/opt/airflow/NOTICE:cached
       - ../../CHANGELOG.txt:/opt/airflow/CHANGELOG:cached
       - ../../.github:/opt/airflow/.github:cached
-      - ../../.bash_completion.d:/root/.bash_completion.d:cached
-      - ../../.bash_history:/root/.bash_history:cached
-      - ../../.bash_aliases:/root/.bash_aliases:cached
-      - ../../.inputrc:/root/.inputrc:cached
       - ../../.flake8:/opt/airflow/.flake8:cached
       - ../../.rat-excludes:/opt/airflow/.rat-excludes:cached
       - ../../run-tests:/opt/airflow/run-tests:cached
+      - ../../run-tests-complete:/root/run-tests-complete:cached
       - ../../logs:/root/airflow/logs:cached
+      - ../../logs:/opt/airflow/logs:cached
       - ../../tmp:/opt/airflow/tmp:cached
-      - ../../files:/files:cached
+      - ../../.bash_completion.d:/root/.bash_completion.d:cached
+      - ../../.bash_completion:/root/.bash_completion:cached
+      - ../../.bash_history:/root/.bash_history:cached
+      - ../../.bash_aliases:/root/.bash_aliases:cached
+      - ../../.inputrc:/root/.inputrc:cached
     environment:
       - HOST_USER_ID
       - HOST_GROUP_ID

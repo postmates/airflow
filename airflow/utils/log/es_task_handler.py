@@ -29,7 +29,6 @@ from airflow.utils.helpers import parse_template_string
 from airflow.utils.log.file_task_handler import FileTaskHandler
 from airflow.utils.log.json_formatter import JSONFormatter
 from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.configuration import conf
 
 
 class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
@@ -55,8 +54,7 @@ class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
     def __init__(self, base_log_folder, filename_template,
                  log_id_template, end_of_log_mark,
                  write_stdout, json_format, json_fields,
-                 host='localhost:9200',
-                 es_kwargs=conf.getsection("elasticsearch_configs") or {}):
+                 host='localhost:9200'):
         """
         :param base_log_folder: base folder to store logs locally
         :param log_id_template: log id template
@@ -69,7 +67,7 @@ class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
         self.log_id_template, self.log_id_jinja_template = \
             parse_template_string(log_id_template)
 
-        self.client = elasticsearch.Elasticsearch([host], **es_kwargs)
+        self.client = elasticsearch.Elasticsearch([host])
 
         self.mark_end_on_close = True
         self.end_of_log_mark = end_of_log_mark
@@ -249,7 +247,7 @@ class ElasticsearchTaskHandler(FileTaskHandler, LoggingMixin):
 
         # Mark the end of file using end of log mark,
         # so we know where to stop while auto-tailing.
-        self.handler.stream.write(self.end_of_log_mark)
+        self.handler.emit(logging.makeLogRecord({'msg': self.end_of_log_mark}))
 
         if self.write_stdout:
             self.handler.close()
