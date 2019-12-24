@@ -32,7 +32,7 @@ in_container_basic_sanity_check
 
 in_container_script_start
 
-AIRFLOW_ROOT="${MY_DIR}/../../.."
+AIRFLOW_SOURCES=$(cd "${MY_DIR}/../../.." || exit 1; pwd)
 
 PYTHON_VERSION=${PYTHON_VERSION:=3.6}
 ENV=${ENV:=docker}
@@ -54,6 +54,29 @@ echo "Airflow home: ${AIRFLOW_HOME}"
 echo "Airflow sources: ${AIRFLOW_SOURCES}"
 echo "Airflow core SQL connection: ${AIRFLOW__CORE__SQL_ALCHEMY_CONN:=}"
 echo
+
+CLEAN_FILES=${CLEAN_FILES:=false}
+
+if [[ ! -d "${AIRFLOW_SOURCES}/airflow/www_rbac/node_modules" && "${CLEAN_FILES}" == "false" ]]; then
+    echo
+    echo "Installing NPM modules as they are not yet installed (sources are mounted from the host)"
+    echo
+    pushd "${AIRFLOW_SOURCES}/airflow/www_rbac/"
+    npm ci
+    echo
+    popd
+fi
+if [[ ! -d "${AIRFLOW_SOURCES}/airflow/www_rbac/static/dist" && ${CLEAN_FILES} == "false" ]]; then
+    pushd "${AIRFLOW_SOURCES}/airflow/www_rbac/"
+    echo
+    echo "Building production version of javascript files (sources are mounted from the host)"
+    echo
+    echo
+    npm run prod
+    echo
+    echo
+    popd
+fi
 
 ARGS=( "$@" )
 
@@ -80,9 +103,12 @@ if [[ ! -d "${AIRFLOW_SOURCES}/airflow/www_rbac/static/dist" ]]; then
     popd &>/dev/null || exit 1
 fi
 
+export HADOOP_DISTRO="${HADOOP_DISTRO:="cdh"}"
+export HADOOP_HOME="${HADOOP_HOME:="/tmp/hadoop-cdh"}"
+
 if [[ ${AIRFLOW_CI_VERBOSE} == "true" ]]; then
     echo
-    echo "Using ${HADOOP_DISTRO:=} distribution of Hadoop from ${HADOOP_HOME:=}"
+    echo "Using ${HADOOP_DISTRO} distribution of Hadoop from ${HADOOP_HOME}"
     echo
 fi
 
@@ -95,13 +121,15 @@ export PYTHONPATH=${PYTHONPATH:-${AIRFLOW_SOURCES}/tests/test_utils}
 export PATH=${PATH}:${AIRFLOW_SOURCES}
 
 export AIRFLOW__CORE__UNIT_TEST_MODE=True
-export HADOOP_DISTRO
+
+# Make sure all AWS API calls default to the us-east-1 region
+export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:='us-east-1'}
 
 # Fix codecov build path
 # TODO: Check this - this should be made travis-independent
 if [[ ! -h /home/travis/build/apache/airflow ]]; then
   sudo mkdir -p /home/travis/build/apache
-  sudo ln -s "${AIRFLOW_ROOT}" /home/travis/build/apache/airflow
+  sudo ln -s "${AIRFLOW_SOURCES}" /home/travis/build/apache/airflow
 fi
 
 # Fix file permissions
@@ -167,7 +195,7 @@ if [[ "${ENV}" == "docker" ]]; then
 
     if [[ ${RES_1} != 0 || ${RES_2} != 0 || ${RES_3} != 0 ]]; then
         echo
-        echo "ERROR! There was a problem communicating with kerberos"
+        echo "ERROR:  There was a problem communicating with kerberos"
         echo "Errors produced by kadmin commands are in : ${AIRFLOW_HOME}/logs/kadmin*.log"
         echo
         echo "Action! Please restart the environment!"
@@ -201,7 +229,7 @@ if [[ ${#ARGS} == 0 ]]; then
           "--cover-erase"
           "--cover-html"
           "--cover-package=airflow"
-          "--cover-html-dir=airflow/www/static/coverage"
+          "--cover-html-dir=airflow/www_rbac/static/coverage"
           "--with-ignore-docstrings"
           "--rednose"
           "--with-xunit"

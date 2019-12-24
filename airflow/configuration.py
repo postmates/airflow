@@ -165,6 +165,12 @@ class AirflowConfigParser(ConfigParser):
         },
     }
 
+    # This method transforms option names on every read, get, or set operation.
+    # This changes from the default behaviour of ConfigParser from lowercasing
+    # to instead be case-preserving
+    def optionxform(self, optionstr):
+        return optionstr
+
     def __init__(self, default_config=None, *args, **kwargs):
         super(AirflowConfigParser, self).__init__(*args, **kwargs)
 
@@ -436,8 +442,15 @@ class AirflowConfigParser(ConfigParser):
                     opt = opt.replace('%', '%%')
                 if display_source:
                     opt = (opt, 'env var')
-                cfg.setdefault(section.lower(), OrderedDict()).update(
-                    {key.lower(): opt})
+
+                section = section.lower()
+                # if we lower key for kubernetes_environment_variables section,
+                # then we won't be able to set any Airflow environment
+                # variables. Airflow only parse environment variables starts
+                # with AIRFLOW_. Therefore, we need to make it a special case.
+                if section != 'kubernetes_environment_variables':
+                    key = key.lower()
+                cfg.setdefault(section, OrderedDict()).update({key: opt})
 
         # add bash commands
         if include_cmds:
@@ -644,7 +657,7 @@ set = conf.set # noqa
 for func in [load_test_config, get, getboolean, getfloat, getint, has_option,
              remove_option, as_dict, set]:
     deprecated(
-        func,
+        func.__name__,
         "Accessing configuration method '{f.__name__}' directly from "
         "the configuration module is deprecated. Please access the "
         "configuration from the 'configuration.conf' object via "

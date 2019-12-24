@@ -28,14 +28,14 @@ basic_sanity_checks
 
 script_start
 
-rebuild_image_if_needed_for_tests
+rebuild_ci_image_if_needed
 
 # Test environment
 export BACKEND=${BACKEND:="sqlite"}
 export ENV=${ENV:="docker"}
 export KUBERNETES_MODE=${KUBERNETES_MODE:="git_mode"}
 
-# Whether local sources are mounted to docker
+# Whether necessary for airflow run local sources are mounted to docker
 export MOUNT_LOCAL_SOURCES=${MOUNT_LOCAL_SOURCES:="false"}
 
 # whethere verbose output should be produced
@@ -97,7 +97,7 @@ elif [[ "${ENV}" == "bare" ]]; then
         run --no-deps airflow-testing /opt/airflow/scripts/ci/in_container/entrypoint_ci.sh;
 else
     echo >&2
-    echo >&2 "ERROR! The ENV variable should be one of [docker, kubernetes, bare] and is '${ENV}'"
+    echo >&2 "ERROR:  The ENV variable should be one of [docker, kubernetes, bare] and is '${ENV}'"
     echo >&2
 fi
 set -u
