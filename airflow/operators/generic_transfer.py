@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -16,11 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-from typing import Union, List
+from typing import List, Optional, Union
 
+from airflow.hooks.base_hook import BaseHook
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
-from airflow.hooks.base_hook import BaseHook
 
 
 class GenericTransfer(BaseOperator):
@@ -56,7 +55,7 @@ class GenericTransfer(BaseOperator):
             destination_table: str,
             source_conn_id: str,
             destination_conn_id: str,
-            preoperator: Union[str, List[str]] = None,
+            preoperator: Optional[Union[str, List[str]]] = None,
             *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.sql = sql

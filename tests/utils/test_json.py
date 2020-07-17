@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -17,9 +16,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from datetime import datetime, date
 import json
 import unittest
+from datetime import date, datetime
 
 import numpy as np
 
@@ -65,7 +64,3 @@ class TestAirflowJsonEncoder(unittest.TestCase):
                                json.dumps,
                                Exception,
                                cls=utils_json.AirflowJsonEncoder)
-
-
-if __name__ == '__main__':
-    unittest.main()

@@ -29,12 +29,14 @@ configuring an Airflow environment.
 .. toctree::
     :maxdepth: 2
 
+    add-dag-tags
     add-new-role
     set-config
     initialize-database
     operator/index
+    customize-state-colors-ui
+    custom-operator
     connection/index
-    secure-connections
     write-logs
     run-behind-proxy
     run-with-systemd
@@ -43,3 +45,5 @@ configuring an Airflow environment.
     check-health
     define_extra_link
     tracking-user-activity
+    email-config
+    use-alternative-secrets-backend

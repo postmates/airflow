@@ -28,8 +28,17 @@ library, you should be able to use any database backend supported as a
 SqlAlchemy backend. We recommend using **MySQL** or **Postgres**.
 
 .. note:: We rely on more strict ANSI SQL settings for MySQL in order to have
-   sane defaults. Make sure to have specified `explicit_defaults_for_timestamp=1`
-   in your my.cnf under `[mysqld]`
+   sane defaults. Make sure to have specified ``explicit_defaults_for_timestamp=1``
+   in your my.cnf under ``[mysqld]``
+
+.. note:: If you decide to use **MySQL**, we recommend using the ``mysqlclient``
+   driver and specifying it in your SqlAlchemy connection string. (I.e.,
+   ``mysql+mysqldb://<user>:<password>@<host>[:<port>]/<dbname>``.)
+   But we also support the ``mysql-connector-python`` driver (I.e.,
+   ``mysql+mysqlconnector://<user>:<password>@<host>[:<port>]/<dbname>``.) which lets you connect through SSL
+   without any cert options provided. However if you want to use other drivers visit the
+   `SqlAlchemy docs <https://docs.sqlalchemy.org/en/13/dialects/mysql.html>`_ for more information regarding download
+   and setup of the SqlAlchemy connection.
 
 .. note:: If you decide to use **Postgres**, we recommend using the ``psycopg2``
    driver and specifying it in your SqlAlchemy connection string. (I.e.,

@@ -34,11 +34,12 @@ To use this operators, you must do a few things:
 Basic Usage
 ^^^^^^^^^^^
 
-Use the :class:`~airflow/contrib/operators/dingding_operator.DingdingOperator`
+Use the :class:`~airflow.providers.dingding.operators.dingding.DingdingOperator`
 to send Dingding message:
 
-.. exampleinclude:: ../../../airflow/contrib/example_dags/example_dingding_operator.py
+.. exampleinclude:: /../airflow/providers/dingding/example_dags/example_dingding.py
     :language: python
+    :dedent: 4
     :start-after: [START howto_operator_dingding]
     :end-before: [END howto_operator_dingding]
 
@@ -49,8 +50,9 @@ Remind users in message
 Use parameters ``at_mobiles`` and ``at_all`` to remind specific users when you send message,
 ``at_mobiles`` will be ignored When ``at_all`` is set to ``True``:
 
-.. exampleinclude:: ../../../airflow/contrib/example_dags/example_dingding_operator.py
+.. exampleinclude:: /../airflow/providers/dingding/example_dags/example_dingding.py
     :language: python
+    :dedent: 4
     :start-after: [START howto_operator_dingding_remind_users]
     :end-before: [END howto_operator_dingding_remind_users]
 
@@ -61,8 +63,9 @@ Send rich text message
 The Dingding operator can send rich text messages including link, markdown, actionCard and feedCard.
 A rich text message can not remind specific users except by using markdown type message:
 
-.. exampleinclude:: ../../../airflow/contrib/example_dags/example_dingding_operator.py
+.. exampleinclude:: /../airflow/providers/dingding/example_dags/example_dingding.py
     :language: python
+    :dedent: 4
     :start-after: [START howto_operator_dingding_rich_text]
     :end-before: [END howto_operator_dingding_rich_text]
 
@@ -74,7 +77,7 @@ Dingding operator could handle task callback by writing a function wrapper dingd
 and then pass the function to ``sla_miss_callback``, ``on_success_callback``, ``on_failure_callback``,
 or ``on_retry_callback``. Here we use ``on_failure_callback`` as an example:
 
-.. exampleinclude:: ../../../airflow/contrib/example_dags/example_dingding_operator.py
+.. exampleinclude:: /../airflow/providers/dingding/example_dags/example_dingding.py
     :language: python
     :start-after: [START howto_operator_dingding_failure_callback]
     :end-before: [END howto_operator_dingding_failure_callback]

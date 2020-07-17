@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -18,8 +17,9 @@
 # under the License.
 
 import unittest
-from unittest.mock import Mock
 from datetime import timedelta
+from unittest.mock import Mock
+
 from freezegun import freeze_time
 
 from airflow.models import TaskInstance

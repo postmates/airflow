@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -16,26 +15,25 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-
-from airflow.typing import Protocol
+import logging
 from typing import Optional
-from airflow import configuration
+
+from cryptography.fernet import Fernet, MultiFernet
+
+from airflow.configuration import conf
 from airflow.exceptions import AirflowException
-from airflow.utils.log.logging_mixin import LoggingMixin
+from airflow.typing_compat import Protocol
+
+log = logging.getLogger(__name__)
 
 
 class FernetProtocol(Protocol):
+    """This class is only used for TypeChecking (for IDEs, mypy, pylint, etc)"""
     def decrypt(self, b):
         ...
 
     def encrypt(self, b):
         ...
-
-
-class InvalidFernetToken(Exception):
-    # If Fernet isn't loaded we need a valid exception class to catch. If it is
-    # loaded this will get reset to the actual class once get_fernet() is called
-    pass
 
 
 class NullFernet:
@@ -70,24 +68,12 @@ def get_fernet():
     :raises: airflow.exceptions.AirflowException if there's a problem trying to load Fernet
     """
     global _fernet
-    log = LoggingMixin().log
 
     if _fernet:
         return _fernet
-    try:
-        from cryptography.fernet import Fernet, MultiFernet, InvalidToken
-        global InvalidFernetToken
-        InvalidFernetToken = InvalidToken
-
-    except ImportError:
-        log.warning(
-            "cryptography not found - values will not be stored encrypted."
-        )
-        _fernet = NullFernet()
-        return _fernet
 
     try:
-        fernet_key = configuration.conf.get('core', 'FERNET_KEY')
+        fernet_key = conf.get('core', 'FERNET_KEY')
         if not fernet_key:
             log.warning(
                 "empty cryptography key - values will not be stored encrypted."

@@ -22,10 +22,10 @@
 PythonOperator
 ==============
 
-Use the :class:`~airflow.operators.python_operator.PythonOperator` to execute
+Use the :class:`~airflow.operators.python.PythonOperator` to execute
 Python callables.
 
-.. exampleinclude:: ../../../airflow/example_dags/example_python_operator.py
+.. exampleinclude:: /../airflow/example_dags/example_python_operator.py
     :language: python
     :start-after: [START howto_operator_python]
     :end-before: [END howto_operator_python]
@@ -36,7 +36,7 @@ Passing in arguments
 Use the ``op_args`` and ``op_kwargs`` arguments to pass additional arguments
 to the Python callable.
 
-.. exampleinclude:: ../../../airflow/example_dags/example_python_operator.py
+.. exampleinclude:: /../airflow/example_dags/example_python_operator.py
     :language: python
     :start-after: [START howto_operator_python_kwargs]
     :end-before: [END howto_operator_python_kwargs]
@@ -44,9 +44,9 @@ to the Python callable.
 Templating
 ^^^^^^^^^^
 
-When you set the ``provide_context`` argument to ``True``, Airflow passes in
-an additional set of keyword arguments: one for each of the :doc:`Jinja
-template variables <../../macros-ref>` and a ``templates_dict`` argument.
+Airflow passes in an additional set of keyword arguments: one for each of the
+:doc:`Jinja template variables <../../macros-ref>` and a ``templates_dict``
+argument.
 
 The ``templates_dict`` argument is templated, so each value in the dictionary
 is evaluated as a :ref:`Jinja template <jinja-templating>`.

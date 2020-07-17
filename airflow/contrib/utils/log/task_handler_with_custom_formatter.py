@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -16,34 +14,16 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+"""
+This module is deprecated. Please use `airflow.utils.log.task_handler_with_custom_formatter`.
+"""
 
-import logging
+import warnings
 
-from logging import StreamHandler
-from airflow import configuration as conf
-from airflow.utils.helpers import parse_template_string
+# pylint: disable=unused-import
+from airflow.utils.log.task_handler_with_custom_formatter import TaskHandlerWithCustomFormatter  # noqa
 
-
-class TaskHandlerWithCustomFormatter(StreamHandler):
-    def __init__(self, stream):
-        super().__init__()
-
-    def set_context(self, ti):
-        if ti.raw:
-            return
-        prefix = conf.get('core', 'task_log_prefix_template')
-
-        rendered_prefix = ""
-        if prefix:
-            _, self.prefix_jinja_template = parse_template_string(prefix)
-            rendered_prefix = self._render_prefix(ti)
-
-        self.setFormatter(logging.Formatter(rendered_prefix + ":" + self.formatter._fmt))
-        self.setLevel(self.level)
-
-    def _render_prefix(self, ti):
-        if self.prefix_jinja_template:
-            jinja_context = ti.get_template_context()
-            return self.prefix_jinja_template.render(**jinja_context)
-        logging.warning("'task_log_prefix_template' is in invalid format, ignoring the variable value")
-        return ""
+warnings.warn(
+    "This module is deprecated. Please use `airflow.utils.log.task_handler_with_custom_formatter`.",
+    DeprecationWarning, stacklevel=2
+)

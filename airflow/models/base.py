@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -18,12 +17,13 @@
 # under the License.
 
 from typing import Any
+
 from sqlalchemy import MetaData
 from sqlalchemy.ext.declarative import declarative_base
 
-import airflow
+from airflow.configuration import conf
 
-SQL_ALCHEMY_SCHEMA = airflow.configuration.get("core", "SQL_ALCHEMY_SCHEMA")
+SQL_ALCHEMY_SCHEMA = conf.get("core", "SQL_ALCHEMY_SCHEMA")
 
 metadata = (
     None
@@ -33,3 +33,20 @@ metadata = (
 Base = declarative_base(metadata=metadata)  # type: Any
 
 ID_LEN = 250
+
+
+# used for typing
+class Operator:
+    """ Class just used for Typing """
+
+
+def get_id_collation_args():
+    """ Get SQLAlchemy args to use for COLLATION """
+    collation = conf.get('core', 'sql_engine_collation_for_ids', fallback=None)
+    if collation:
+        return {'collation': collation}
+    else:
+        return {}
+
+
+COLLATION_ARGS = get_id_collation_args()

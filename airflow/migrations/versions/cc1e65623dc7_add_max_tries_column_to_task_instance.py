@@ -23,16 +23,17 @@ Create Date: 2017-06-19 16:53:12.851141
 
 """
 
-from alembic import op
 import sqlalchemy as sa
-from airflow import settings
-from airflow.models import DagBag
-
+from alembic import op
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.ext.declarative import declarative_base
 
+from airflow import settings
+from airflow.models import DagBag
 # revision identifiers, used by Alembic.
+from airflow.models.base import COLLATION_ARGS
+
 revision = 'cc1e65623dc7'
 down_revision = '127d2bf2dfa7'
 branch_labels = None
@@ -43,17 +44,17 @@ BATCH_SIZE = 5000
 ID_LEN = 250
 
 
-class TaskInstance(Base):
+class TaskInstance(Base):  # noqa: D101  # type: ignore
     __tablename__ = "task_instance"
 
-    task_id = Column(String(ID_LEN), primary_key=True)
-    dag_id = Column(String(ID_LEN), primary_key=True)
+    task_id = Column(String(ID_LEN, **COLLATION_ARGS), primary_key=True)
+    dag_id = Column(String(ID_LEN, **COLLATION_ARGS), primary_key=True)
     execution_date = Column(sa.DateTime, primary_key=True)
     max_tries = Column(Integer)
     try_number = Column(Integer, default=0)
 
 
-def upgrade():
+def upgrade():   # noqa: D103
     op.add_column('task_instance', sa.Column('max_tries', sa.Integer, server_default="-1"))
     # Check if table task_instance exist before data migration. This check is
     # needed for database that does not create table until migration finishes.
@@ -99,7 +100,7 @@ def upgrade():
         session.commit()
 
 
-def downgrade():
+def downgrade():   # noqa: D103
     engine = settings.engine
     if engine.dialect.has_table(engine, 'task_instance'):
         connection = op.get_bind()

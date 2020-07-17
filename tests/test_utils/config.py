@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -18,14 +17,22 @@
 # under the License.
 
 import contextlib
+import os
 
+from airflow import settings
 from airflow.configuration import conf
 
 
 @contextlib.contextmanager
 def conf_vars(overrides):
     original = {}
+    original_env_vars = {}
     for (section, key), value in overrides.items():
+
+        env = conf._env_var_name(section, key)
+        if env in os.environ:
+            original_env_vars[env] = os.environ.pop(env)
+
         if conf.has_option(section, key):
             original[(section, key)] = conf.get(section, key)
         else:
@@ -34,9 +41,35 @@ def conf_vars(overrides):
             conf.set(section, key, value)
         else:
             conf.remove_option(section, key)
-    yield
-    for (section, key), value in original.items():
-        if value is not None:
-            conf.set(section, key, value)
+    settings.configure_vars()
+    try:
+        yield
+    finally:
+        for (section, key), value in original.items():
+            if value is not None:
+                conf.set(section, key, value)
+            else:
+                conf.remove_option(section, key)
+        for env, value in original_env_vars.items():
+            os.environ[env] = value
+        settings.configure_vars()
+
+
+@contextlib.contextmanager
+def env_vars(overrides):
+    orig_vars = {}
+    new_vars = []
+    for (section, key), value in overrides.items():
+        env = conf._env_var_name(section, key)
+        if env in os.environ:
+            orig_vars[env] = os.environ.pop(env, '')
         else:
-            conf.remove_option(section, key)
+            new_vars.append(env)
+        os.environ[env] = value
+    try:
+        yield
+    finally:
+        for env, value in orig_vars.items():
+            os.environ[env] = value
+        for env in new_vars:
+            os.environ.pop(env)

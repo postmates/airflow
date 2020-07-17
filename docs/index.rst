@@ -18,7 +18,7 @@
 
 
 
-.. image:: img/pin_large.png
+.. image:: ../airflow/www/static/pin_large.png
     :width: 100
 
 Apache Airflow Documentation
@@ -84,22 +84,32 @@ Content
     concepts
     scheduler
     executor/index
+    dag-run
     plugins
     security
     timezone
     Using the CLI <usage-cli>
     integration
     metrics
+    errors
     kubernetes
     lineage
+    dag-serialization
+    Using the REST API <stable-rest-api/index.rst>
+    REST API Migration Guide <stable-rest-api/migration.rst>
     changelog
+    best-practices
     faq
+    privacy_notice
 
 .. toctree::
     :maxdepth: 1
     :caption: References
 
+    Operators and hooks <operators-and-hooks-ref>
     CLI <cli-ref>
     Macros <macros-ref>
     Python API <_api/index>
-    REST API <rest-api-ref>
+    Experimental REST API <rest-api-ref>
+    Stable REST API <stable-rest-api/redoc>
+    Configurations <configurations-ref>

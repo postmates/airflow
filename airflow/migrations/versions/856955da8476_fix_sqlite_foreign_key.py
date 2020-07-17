@@ -23,8 +23,8 @@ Create Date: 2018-06-17 15:54:53.844230
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '856955da8476'
@@ -34,6 +34,7 @@ depends_on = None
 
 
 def upgrade():
+    """Fix broken foreign-key constraint for existing SQLite DBs."""
     conn = op.get_bind()
     if conn.dialect.name == 'sqlite':
         # Fix broken foreign-key constraint for existing SQLite DBs.
@@ -65,6 +66,6 @@ def upgrade():
                                         ['user_id'], ['id'])
 
 
-def downgrade():
+def downgrade():   # noqa: D103
     # Downgrade would fail because the broken FK constraint can't be re-created.
     pass

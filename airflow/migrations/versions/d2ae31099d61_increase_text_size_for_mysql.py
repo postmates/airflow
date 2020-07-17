@@ -23,9 +23,8 @@ Revises: 947454bf1dff
 Create Date: 2017-08-18 17:07:16.686130
 
 """
-from alembic import op
+from alembic import context, op
 from sqlalchemy.dialects import mysql
-from alembic import context
 
 # revision identifiers, used by Alembic.
 revision = 'd2ae31099d61'
@@ -34,11 +33,11 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade():   # noqa: D103
     if context.config.get_main_option('sqlalchemy.url').startswith('mysql'):
         op.alter_column(table_name='variable', column_name='val', type_=mysql.MEDIUMTEXT)
 
 
-def downgrade():
+def downgrade():   # noqa: D103
     if context.config.get_main_option('sqlalchemy.url').startswith('mysql'):
         op.alter_column(table_name='variable', column_name='val', type_=mysql.TEXT)

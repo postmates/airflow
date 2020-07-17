@@ -24,9 +24,8 @@ Create Date: 2016-09-11 13:39:18.592072
 
 """
 
-from alembic import op
+from alembic import context, op
 from sqlalchemy.dialects import mysql
-from alembic import context
 
 # revision identifiers, used by Alembic.
 revision = '4addfa1236f1'
@@ -35,7 +34,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade():   # noqa: D103
     if context.config.get_main_option('sqlalchemy.url').startswith('mysql'):
         op.alter_column(table_name='dag', column_name='last_scheduler_run',
                         type_=mysql.DATETIME(fsp=6))
@@ -98,7 +97,7 @@ def upgrade():
                         type_=mysql.DATETIME(fsp=6))
 
 
-def downgrade():
+def downgrade():   # noqa: D103
     if context.config.get_main_option('sqlalchemy.url').startswith('mysql'):
         op.alter_column(table_name='dag', column_name='last_scheduler_run',
                         type_=mysql.DATETIME())

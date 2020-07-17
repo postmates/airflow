@@ -1,4 +1,20 @@
-# -*- coding: utf-8 -*-
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 #
 # Copyright (c) 2013, Michael Komitee
 # All rights reserved.
@@ -24,31 +40,24 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Kerberos authentication module"""
+import logging
 import os
-
 from functools import wraps
 from socket import getfqdn
-
-from flask import Response
-# noinspection PyProtectedMember
-from flask import _request_ctx_stack as stack  # type: ignore
-from flask import make_response
-from flask import request
-from flask import g
+from typing import Callable, Optional, Tuple, TypeVar, Union, cast
 
 import kerberos
-
+# noinspection PyProtectedMember
+from flask import Response, _request_ctx_stack as stack, g, make_response, request  # type: ignore
+from requests.auth import AuthBase
 from requests_kerberos import HTTPKerberosAuth
 
-from airflow import configuration as conf
-from airflow.utils.log.logging_mixin import LoggingMixin
+from airflow.configuration import conf
 
+log = logging.getLogger(__name__)
 
 # pylint: disable=c-extension-no-member
-CLIENT_AUTH = HTTPKerberosAuth(service='airflow')
-
-
-LOG = LoggingMixin().log
+CLIENT_AUTH: Optional[Union[Tuple[str, str], AuthBase]] = HTTPKerberosAuth(service='airflow')
 
 
 class KerberosService:  # pylint: disable=too-few-public-methods
@@ -67,7 +76,7 @@ def init_app(app):
     hostname = app.config.get('SERVER_NAME')
     if not hostname:
         hostname = getfqdn()
-    LOG.info("Kerberos: hostname %s", hostname)
+    log.info("Kerberos: hostname %s", hostname)
 
     service = 'airflow'
 
@@ -77,12 +86,12 @@ def init_app(app):
         os.environ['KRB5_KTNAME'] = conf.get('kerberos', 'keytab')
 
     try:
-        LOG.info("Kerberos init: %s %s", service, hostname)
+        log.info("Kerberos init: %s %s", service, hostname)
         principal = kerberos.getServerPrincipalDetails(service, hostname)
     except kerberos.KrbError as err:
-        LOG.warning("Kerberos: %s", err)
+        log.warning("Kerberos: %s", err)
     else:
-        LOG.info("Kerberos API: server is %s", principal)
+        log.info("Kerberos API: server is %s", principal)
 
 
 def _unauthorized():
@@ -119,7 +128,10 @@ def _gssapi_authenticate(token):
             kerberos.authGSSServerClean(state)
 
 
-def requires_authentication(function):
+T = TypeVar("T", bound=Callable)  # pylint: disable=invalid-name
+
+
+def requires_authentication(function: T):
     """Decorator for functions that require authentication with Kerberos"""
     @wraps(function)
     def decorated(*args, **kwargs):
@@ -140,4 +152,4 @@ def requires_authentication(function):
             if return_code != kerberos.AUTH_GSS_CONTINUE:
                 return _forbidden()
         return _unauthorized()
-    return decorated
+    return cast(T, decorated)

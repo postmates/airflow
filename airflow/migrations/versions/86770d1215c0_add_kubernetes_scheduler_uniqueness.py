@@ -23,8 +23,8 @@ Revises: 27c6a30d7c24
 Create Date: 2018-04-03 15:31:20.814328
 
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '86770d1215c0'
@@ -35,7 +35,7 @@ depends_on = None
 RESOURCE_TABLE = "kube_worker_uuid"
 
 
-def upgrade():
+def upgrade():   # noqa: D103
 
     columns_and_constraints = [
         sa.Column("one_row_id", sa.Boolean, server_default=sa.true(), primary_key=True),
@@ -45,11 +45,11 @@ def upgrade():
     conn = op.get_bind()
 
     # alembic creates an invalid SQL for mssql and mysql dialects
-    if conn.dialect.name in ("mysql"):
+    if conn.dialect.name in {"mysql"}:
         columns_and_constraints.append(
             sa.CheckConstraint("one_row_id<>0", name="kube_worker_one_row_id")
         )
-    elif conn.dialect.name not in ("mssql"):
+    elif conn.dialect.name not in {"mssql"}:
         columns_and_constraints.append(
             sa.CheckConstraint("one_row_id", name="kube_worker_one_row_id")
         )
@@ -64,5 +64,5 @@ def upgrade():
     ])
 
 
-def downgrade():
+def downgrade():   # noqa: D103
     op.drop_table(RESOURCE_TABLE)
