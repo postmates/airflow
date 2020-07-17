@@ -32,7 +32,11 @@ from datetime import timedelta
 from tempfile import mkdtemp
 
 import psutil
+import pytest
 import six
+from freezegun import freeze_time
+
+from airflow.models.taskinstance import TaskInstance
 from parameterized import parameterized
 
 import airflow.example_dags
@@ -51,6 +55,7 @@ from airflow.utils.db import create_session, provide_session
 from airflow.utils.state import State
 from tests.compat import MagicMock, Mock, PropertyMock, mock, patch
 from tests.test_core import TEST_DAG_FOLDER
+from tests.test_utils.config import conf_vars
 from tests.test_utils.db import (
     clear_db_dags, clear_db_errors, clear_db_pools, clear_db_runs, clear_db_sla_miss, set_default_pool_slots,
 )
@@ -81,6 +86,13 @@ class SchedulerJobTest(unittest.TestCase):
         # Speed up some tests by not running the tasks, just look at what we
         # enqueue!
         self.null_exec = MockExecutor()
+
+    def tearDown(self):
+        clear_db_runs()
+        clear_db_pools()
+        clear_db_dags()
+        clear_db_sla_miss()
+        clear_db_errors()
 
     def create_test_dag(self, start_date=DEFAULT_DATE, end_date=DEFAULT_DATE + timedelta(hours=1), **kwargs):
         dag = DAG(
@@ -120,6 +132,11 @@ class SchedulerJobTest(unittest.TestCase):
         self.assertTrue(job.is_alive())
 
         job.latest_heartbeat = timezone.utcnow() - datetime.timedelta(seconds=31)
+        self.assertFalse(job.is_alive())
+
+        # test because .seconds was used before instead of total_seconds
+        # internal repr of datetime is (days, seconds)
+        job.latest_heartbeat = timezone.utcnow() - datetime.timedelta(days=1)
         self.assertFalse(job.is_alive())
 
         job.state = State.SUCCESS
@@ -869,8 +886,8 @@ class SchedulerJobTest(unittest.TestCase):
             ti.refresh_from_db()
             self.assertEqual(State.QUEUED, ti.state)
 
-    @unittest.skipUnless("INTEGRATION" in os.environ,
-                         "The test is flaky with nondeterministic result")
+    @pytest.mark.quarantined
+    @pytest.mark.xfail(condition=True, reason="The test is flaky with nondeterministic result")
     def test_change_state_for_tis_without_dagrun(self):
         dag1 = DAG(dag_id='test_change_state_for_tis_without_dagrun', start_date=DEFAULT_DATE)
 
@@ -1361,6 +1378,31 @@ class SchedulerJobTest(unittest.TestCase):
         self.assertEqual(
             len(session.query(TI).filter(TI.dag_id == dag_id).all()), 0)
 
+    @conf_vars({("core", "mp_start_method"): "spawn"})
+    def test_scheduler_multiprocessing_with_spawn_method(self):
+        """
+        Test that the scheduler can successfully queue multiple dags in parallel
+        when using "spawn" mode of multiprocessing. (Fork is default on Linux and older OSX)
+        """
+        dag_ids = ['test_start_date_scheduling', 'test_dagrun_states_success']
+        for dag_id in dag_ids:
+            dag = self.dagbag.get_dag(dag_id)
+            dag.clear()
+
+        scheduler = SchedulerJob(dag_ids=dag_ids,
+                                 executor=self.null_exec,
+                                 subdir=os.path.join(
+                                     TEST_DAG_FOLDER, 'test_scheduler_dags.py'),
+                                 num_runs=1)
+
+        scheduler.run()
+
+        # zero tasks ran
+        dag_id = 'test_start_date_scheduling'
+        with create_session() as session:
+            self.assertEqual(
+                session.query(TaskInstance).filter(TaskInstance.dag_id == dag_id).count(), 0)
+
     def test_scheduler_dagrun_once(self):
         """
         Test if the scheduler does not create multiple dagruns
@@ -1376,6 +1418,52 @@ class SchedulerJobTest(unittest.TestCase):
         dr = scheduler.create_dag_run(dag)
         self.assertIsNotNone(dr)
         dr = scheduler.create_dag_run(dag)
+        self.assertIsNone(dr)
+
+    @freeze_time(timezone.datetime(2020, 1, 5))
+    def test_scheduler_dagrun_with_timedelta_schedule_and_catchup_false(self):
+        """
+        Test that the dag file processor does not create multiple dagruns
+        if a dag is scheduled with 'timedelta' and catchup=False
+        """
+        dag = DAG(
+            'test_scheduler_dagrun_once_with_timedelta_and_catchup_false',
+            start_date=timezone.datetime(2015, 1, 1),
+            schedule_interval=timedelta(days=1),
+            catchup=False)
+
+        scheduler_job = SchedulerJob()
+        dag.clear()
+        dr = scheduler_job.create_dag_run(dag)
+        self.assertIsNotNone(dr)
+        self.assertEqual(dr.execution_date, timezone.datetime(2020, 1, 4))
+        dr = scheduler_job.create_dag_run(dag)
+        self.assertIsNone(dr)
+
+    @freeze_time(timezone.datetime(2020, 5, 4))
+    def test_scheduler_dagrun_with_timedelta_schedule_and_catchup_true(self):
+        """
+        Test that the dag file processor creates multiple dagruns
+        if a dag is scheduled with 'timedelta' and catchup=True
+        """
+        dag = DAG(
+            'test_scheduler_dagrun_once_with_timedelta_and_catchup_true',
+            start_date=timezone.datetime(2020, 5, 1),
+            schedule_interval=timedelta(days=1),
+            catchup=True)
+
+        scheduler_job = SchedulerJob()
+        dag.clear()
+        dr = scheduler_job.create_dag_run(dag)
+        self.assertIsNotNone(dr)
+        self.assertEqual(dr.execution_date, timezone.datetime(2020, 5, 1))
+        dr = scheduler_job.create_dag_run(dag)
+        self.assertIsNotNone(dr)
+        self.assertEqual(dr.execution_date, timezone.datetime(2020, 5, 2))
+        dr = scheduler_job.create_dag_run(dag)
+        self.assertIsNotNone(dr)
+        self.assertEqual(dr.execution_date, timezone.datetime(2020, 5, 3))
+        dr = scheduler_job.create_dag_run(dag)
         self.assertIsNone(dr)
 
     @parameterized.expand([
@@ -1828,10 +1916,12 @@ class SchedulerJobTest(unittest.TestCase):
         dag = DAG(
             dag_id='test_scheduler_reschedule',
             start_date=DEFAULT_DATE)
-        dummy_task = DummyOperator(
+        dummy_task = BashOperator(
             task_id='dummy',
             dag=dag,
-            owner='airflow')
+            owner='airflow',
+            bash_command='echo 1',
+        )
 
         dag.clear()
         dag.is_subdag = False
@@ -1939,6 +2029,37 @@ class SchedulerJobTest(unittest.TestCase):
 
         sla_callback.assert_not_called()
 
+    def test_dag_file_processor_sla_miss_deleted_task(self):
+        """
+        Test that the dag file processor will not crash when trying to send
+        sla miss notification for a deleted task
+        """
+        session = settings.Session()
+
+        test_start_date = days_ago(2)
+        dag = DAG(dag_id='test_sla_miss',
+                  default_args={'start_date': test_start_date,
+                                'sla': datetime.timedelta(days=1)})
+
+        task = DummyOperator(task_id='dummy',
+                             dag=dag,
+                             owner='airflow',
+                             email='test@test.com',
+                             sla=datetime.timedelta(hours=1))
+
+        session.merge(models.TaskInstance(task=task,
+                                          execution_date=test_start_date,
+                                          state='Success'))
+
+        # Create an SlaMiss where notification was sent, but email was not
+        session.merge(SlaMiss(task_id='dummy_deleted',
+                              dag_id='test_sla_miss',
+                              execution_date=test_start_date))
+
+        mock_log = mock.MagicMock()
+        scheduler = SchedulerJob(dag_ids=['test_sla_miss'], log=mock_log)
+        scheduler.manage_slas(dag=dag, session=session)
+
     def test_scheduler_executor_overflow(self):
         """
         Test that tasks that are set back to scheduled and removed from the executor
@@ -1971,12 +2092,13 @@ class SchedulerJobTest(unittest.TestCase):
                 # Use a empty file since the above mock will return the
                 # expected DAGs. Also specify only a single file so that it doesn't
                 # try to schedule the above DAG repeatedly.
-                scheduler = SchedulerJob(num_runs=1,
-                                         executor=executor,
-                                         subdir=os.path.join(settings.DAGS_FOLDER,
-                                                             "no_dags.py"))
-                scheduler.heartrate = 0
-                scheduler.run()
+                with conf_vars({('core', 'mp_start_method'): 'fork'}):
+                    scheduler = SchedulerJob(num_runs=1,
+                                             executor=executor,
+                                             subdir=os.path.join(settings.DAGS_FOLDER,
+                                                                 "no_dags.py"))
+                    scheduler.heartrate = 0
+                    scheduler.run()
 
             do_schedule()
             for ti in tis:
@@ -2149,6 +2271,7 @@ class SchedulerJobTest(unittest.TestCase):
                 'Could not send SLA Miss email notification for DAG %s',
                 'test_sla_miss')
 
+    @pytest.mark.quarantined
     def test_retry_still_in_executor(self):
         """
         Checks if the scheduler does not put a task in limbo, when a task is retried
@@ -2187,12 +2310,13 @@ class SchedulerJobTest(unittest.TestCase):
             # Use a empty file since the above mock will return the
             # expected DAGs. Also specify only a single file so that it doesn't
             # try to schedule the above DAG repeatedly.
-            scheduler = SchedulerJob(num_runs=1,
-                                     executor=executor,
-                                     subdir=os.path.join(settings.DAGS_FOLDER,
-                                                         "no_dags.py"))
-            scheduler.heartrate = 0
-            scheduler.run()
+            with conf_vars({('core', 'mp_start_method'): 'fork'}):
+                scheduler = SchedulerJob(num_runs=1,
+                                         executor=executor,
+                                         subdir=os.path.join(settings.DAGS_FOLDER,
+                                                             "no_dags.py"))
+                scheduler.heartrate = 0
+                scheduler.run()
 
         do_schedule()
         with create_session() as session:
@@ -2238,7 +2362,8 @@ class SchedulerJobTest(unittest.TestCase):
         ti.refresh_from_db()
         self.assertEqual(ti.state, State.SUCCESS)
 
-    @unittest.skipUnless("INTEGRATION" in os.environ, "Can only run end to end")
+    @pytest.mark.quarantined
+    @pytest.mark.xfail(condition=True, reason="This test is failing!")
     def test_retry_handling_job(self):
         """
         Integration test of the scheduler not accidentally resetting
@@ -2824,3 +2949,65 @@ class SchedulerJobTest(unittest.TestCase):
             self.assertEqual(state, ti.state)
 
         session.close()
+
+    def test_should_mark_dummy_task_as_success(self):
+        dag_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), '../dags/test_only_dummy_tasks.py'
+        )
+        scheduler_job = SchedulerJob(dag_ids=[], log=mock.MagicMock())
+        with create_session() as session:
+            session.query(TaskInstance).delete()
+            session.query(DagModel).delete()
+
+        dagbag = DagBag(dag_folder=dag_file, include_examples=False)
+        dagbag.get_dag('test_only_dummy_tasks').sync_to_db()
+
+        simple_dags, import_errors_count = scheduler_job.process_file(
+            file_path=dag_file, zombies=[]
+        )
+        with create_session() as session:
+            tis = session.query(TaskInstance).all()
+
+        self.assertEqual(0, import_errors_count)
+        self.assertEqual(['test_only_dummy_tasks'], [dag.dag_id for dag in simple_dags])
+        self.assertEqual(5, len(tis))
+        self.assertEqual({
+            ('test_task_a', 'success'),
+            ('test_task_b', None),
+            ('test_task_c', 'success'),
+            ('test_task_on_execute', 'scheduled'),
+            ('test_task_on_success', 'scheduled'),
+        }, {(ti.task_id, ti.state) for ti in tis})
+        for state, start_date, end_date, duration in [(ti.state, ti.start_date, ti.end_date, ti.duration) for
+                                                      ti in tis]:
+            if state == 'success':
+                self.assertIsNotNone(start_date)
+                self.assertIsNotNone(end_date)
+                self.assertEqual(0.0, duration)
+            else:
+                self.assertIsNone(start_date)
+                self.assertIsNone(end_date)
+                self.assertIsNone(duration)
+
+        scheduler_job.process_file(file_path=dag_file, zombies=[])
+        with create_session() as session:
+            tis = session.query(TaskInstance).all()
+
+        self.assertEqual(5, len(tis))
+        self.assertEqual({
+            ('test_task_a', 'success'),
+            ('test_task_b', 'success'),
+            ('test_task_c', 'success'),
+            ('test_task_on_execute', 'scheduled'),
+            ('test_task_on_success', 'scheduled'),
+        }, {(ti.task_id, ti.state) for ti in tis})
+        for state, start_date, end_date, duration in [(ti.state, ti.start_date, ti.end_date, ti.duration) for
+                                                      ti in tis]:
+            if state == 'success':
+                self.assertIsNotNone(start_date)
+                self.assertIsNotNone(end_date)
+                self.assertEqual(0.0, duration)
+            else:
+                self.assertIsNone(start_date)
+                self.assertIsNone(end_date)
+                self.assertIsNone(duration)

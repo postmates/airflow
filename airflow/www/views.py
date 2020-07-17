@@ -35,8 +35,8 @@ from functools import wraps
 from textwrap import dedent
 
 import markdown
-import pendulum
 import sqlalchemy as sqla
+import pendulum
 from flask import (
     abort, jsonify, redirect, url_for, request, Markup, Response,
     current_app, render_template, make_response)
@@ -50,10 +50,11 @@ from flask_admin.tools import iterdecode
 import lazy_object_proxy
 from jinja2 import escape
 from jinja2.sandbox import ImmutableSandboxedEnvironment
+from jinja2.utils import pformat
 from past.builtins import basestring
 from pygments import highlight, lexers
-from pygments.formatters import HtmlFormatter
 import six
+from pygments.formatters.html import HtmlFormatter
 from six.moves.urllib.parse import quote, unquote
 
 from sqlalchemy import or_, desc, and_, union_all
@@ -61,20 +62,21 @@ from wtforms import (
     Form, SelectField, TextAreaField, PasswordField,
     StringField, IntegerField, validators)
 
+import nvd3
+
 import airflow
-from airflow import LoggingMixin, configuration
+from airflow import configuration
 from airflow.configuration import conf
-from airflow import models
-from airflow import settings
-from airflow import jobs
+from airflow import jobs, models, settings
 from airflow.api.common.experimental.mark_tasks import (set_dag_run_state_to_running,
                                                         set_dag_run_state_to_success,
                                                         set_dag_run_state_to_failed)
 from airflow.exceptions import AirflowException
 from airflow.models import BaseOperator, Connection, DagRun, errors, XCom
-from airflow.settings import STORE_SERIALIZED_DAGS
+from airflow.models.dagcode import DagCode
+from airflow.settings import STATE_COLORS, STORE_SERIALIZED_DAGS
 from airflow.operators.subdag_operator import SubDagOperator
-from airflow.ti_deps.dep_context import DepContext, SCHEDULER_QUEUED_DEPS
+from airflow.ti_deps.dep_context import RUNNING_DEPS, SCHEDULER_QUEUED_DEPS, DepContext
 from airflow.utils import timezone
 from airflow.utils.dates import infer_time_unit, scale_time_units, parse_execution_date
 from airflow.utils.db import create_session, provide_session
@@ -82,7 +84,6 @@ from airflow.utils.helpers import alchemy_to_dict, render_log_filename
 from airflow.utils.net import get_hostname
 from airflow.utils.state import State
 from airflow.utils.timezone import datetime
-from airflow._vendor import nvd3
 from airflow.www import utils as wwwutils
 from airflow.www.forms import (DateTimeForm, DateTimeWithNumRunsForm,
                                DateTimeWithNumRunsWithDagRunsForm)
@@ -102,6 +103,8 @@ logout_user = airflow.login.logout_user
 FILTER_BY_OWNER = False
 
 PAGE_SIZE = conf.getint('webserver', 'page_size')
+
+log = logging.getLogger(__name__)
 
 if conf.getboolean('webserver', 'FILTER_BY_OWNER'):
     # filter_by_owner if authentication is enabled and filter_by_owner is true
@@ -234,20 +237,25 @@ def pygment_html_render(s, lexer=lexers.TextLexer):
 def render(obj, lexer):
     out = ""
     if isinstance(obj, basestring):
-        out += pygment_html_render(obj, lexer)
+        out += Markup(pygment_html_render(obj, lexer))
     elif isinstance(obj, (tuple, list)):
         for i, s in enumerate(obj):
-            out += "<div>List item #{}</div>".format(i)
-            out += "<div>" + pygment_html_render(s, lexer) + "</div>"
+            out += Markup("<div>List item #{}</div>".format(i))
+            out += Markup("<div>" + pygment_html_render(s, lexer) + "</div>")
     elif isinstance(obj, dict):
         for k, v in obj.items():
-            out += '<div>Dict item "{}"</div>'.format(k)
-            out += "<div>" + pygment_html_render(v, lexer) + "</div>"
+            out += Markup('<div>Dict item "{}"</div>'.format(k))
+            out += Markup("<div>" + pygment_html_render(v, lexer) + "</div>")
     return out
 
 
-def wrapped_markdown(s):
-    return '<div class="rich_doc">' + markdown.markdown(s) + "</div>"
+def wrapped_markdown(s, css_class=None):
+    if s is None:
+        return None
+
+    return Markup(
+        '<div class="rich_doc {css_class}" >' + markdown.markdown(s) + "</div>"
+    ).format(css_class=css_class)
 
 
 attr_renderer = {
@@ -595,9 +603,7 @@ class Airflow(AirflowViewMixin, BaseView):
                 count = d.get(state, 0)
                 payload[dag_id].append({
                     'state': state,
-                    'count': count,
-                    'dag_id': dag_id,
-                    'color': State.color(state)
+                    'count': count
                 })
         return wwwutils.json_response(payload)
 
@@ -616,19 +622,19 @@ class Airflow(AirflowViewMixin, BaseView):
 
         LastDagRun = (
             session.query(DagRun.dag_id, sqla.func.max(DagRun.execution_date).label('execution_date'))
-                .join(Dag, Dag.dag_id == DagRun.dag_id)
-                .filter(DagRun.state != State.RUNNING)
-                .filter(Dag.is_active == True)  # noqa: E712
-                .filter(Dag.is_subdag == False)  # noqa: E712
-                .group_by(DagRun.dag_id)
+            .join(Dag, Dag.dag_id == DagRun.dag_id)
+            .filter(DagRun.state != State.RUNNING)
+            .filter(Dag.is_active == True)  # noqa: E712
+            .filter(Dag.is_subdag == False)  # noqa: E712
+            .group_by(DagRun.dag_id)
         )
 
         RunningDagRun = (
             session.query(DagRun.dag_id, DagRun.execution_date)
-                .join(Dag, Dag.dag_id == DagRun.dag_id)
-                .filter(DagRun.state == State.RUNNING)
-                .filter(Dag.is_active == True)  # noqa: E712
-                .filter(Dag.is_subdag == False)  # noqa: E712
+            .join(Dag, Dag.dag_id == DagRun.dag_id)
+            .filter(DagRun.state == State.RUNNING)
+            .filter(Dag.is_active == True)  # noqa: E712
+            .filter(Dag.is_subdag == False)  # noqa: E712
         )
 
         if selected_dag_ids:
@@ -679,9 +685,7 @@ class Airflow(AirflowViewMixin, BaseView):
                 count = data.get(dag_id, {}).get(state, 0)
                 payload[dag_id].append({
                     'state': state,
-                    'count': count,
-                    'dag_id': dag_id,
-                    'color': State.color(state)
+                    'count': count
                 })
         return wwwutils.json_response(payload)
 
@@ -689,19 +693,24 @@ class Airflow(AirflowViewMixin, BaseView):
     @login_required
     @provide_session
     def code(self, session=None):
-        dag_id = request.args.get('dag_id')
-        dm = models.DagModel
-        dag = session.query(dm).filter(dm.dag_id == dag_id).first()
+        all_errors = ""
         try:
-            with wwwutils.open_maybe_zipped(dag.fileloc, 'r') as f:
-                code = f.read()
-            html_code = highlight(
-                code, lexers.PythonLexer(), HtmlFormatter(linenos=True))
-        except IOError as e:
-            html_code = str(e)
+            dag_id = request.args.get('dag_id')
+            dag_orm = models.DagModel.get_dagmodel(dag_id, session=session)
+            code = DagCode.get_code_by_fileloc(dag_orm.fileloc)
+            html_code = Markup(highlight(
+                code, lexers.PythonLexer(), HtmlFormatter(linenos=True)))
+
+        except Exception as e:
+            all_errors += (
+                "Exception encountered during " +
+                "dag_id retrieval/dag retrieval fallback/code highlighting:\n\n{}\n".format(e)
+            )
+            html_code = Markup('<p>Failed to load file.</p><p>Details: {}</p>').format(
+                escape(all_errors))
 
         return self.render(
-            'airflow/dag_code.html', html_code=html_code, dag=dag, title=dag_id,
+            'airflow/dag_code.html', html_code=html_code, dag=dag_orm, title=dag_id,
             root=request.args.get('root'),
             demo_mode=conf.getboolean('webserver', 'demo_mode'),
             wrapped=conf.getboolean('webserver', 'default_wrap'))
@@ -737,16 +746,25 @@ class Airflow(AirflowViewMixin, BaseView):
     @current_app.errorhandler(404)
     def circles(self):
         return render_template(
-            'airflow/circles.html', hostname=get_hostname()), 404
+            'airflow/circles.html', hostname=get_hostname() if conf.getboolean(
+                'webserver',
+                'EXPOSE_HOSTNAME',
+                fallback=True) else 'redact'), 404
 
     @current_app.errorhandler(500)
     def show_traceback(self):
         from airflow.utils import asciiart as ascii_
         return render_template(
             'airflow/traceback.html',
-            hostname=get_hostname(),
+            hostname=get_hostname() if conf.getboolean(
+                'webserver',
+                'EXPOSE_HOSTNAME',
+                fallback=True) else 'redact',
             nukular=ascii_.nukular,
-            info=traceback.format_exc()), 500
+            info=traceback.format_exc() if conf.getboolean(
+                'webserver',
+                'EXPOSE_STACKTRACE',
+                fallback=True) else 'Error! Please contact server admin'), 500
 
     @expose('/noaccess')
     def noaccess(self):
@@ -776,31 +794,36 @@ class Airflow(AirflowViewMixin, BaseView):
     @expose('/rendered')
     @login_required
     @wwwutils.action_logging
-    def rendered(self):
+    @provide_session
+    def rendered(self, session=None):
         dag_id = request.args.get('dag_id')
         task_id = request.args.get('task_id')
         execution_date = request.args.get('execution_date')
         dttm = pendulum.parse(execution_date)
         form = DateTimeForm(data={'execution_date': dttm})
         root = request.args.get('root', '')
-        # Loads dag from file
-        logging.info("Processing DAG file to render template.")
-        dag = dagbag.get_dag(dag_id, from_file_only=True)
+
+        logging.info("Retrieving rendered templates.")
+        dag = dagbag.get_dag(dag_id)
+
         task = copy.copy(dag.get_task(task_id))
         ti = models.TaskInstance(task=task, execution_date=dttm)
         try:
-            ti.render_templates()
+            ti.get_rendered_template_fields()
         except Exception as e:
-            flash("Error rendering template: " + str(e), "error")
+            msg = "Error rendering template: " + escape(e)
+            if six.PY3:
+                if e.__cause__:
+                    msg += Markup("<br/><br/>OriginalError: ") + escape(e.__cause__)
+            flash(msg, "error")
         title = "Rendered Template"
         html_dict = {}
-        for template_field in task.__class__.template_fields:
+        for template_field in task.template_fields:
             content = getattr(task, template_field)
             if template_field in attr_renderer:
                 html_dict[template_field] = attr_renderer[template_field](content)
             else:
-                html_dict[template_field] = (
-                    "<pre><code>" + str(content) + "</pre></code>")
+                html_dict[template_field] = Markup("<pre><code>{}</pre></code>").format(pformat(content))
 
         return self.render(
             'airflow/ti_code.html',
@@ -1129,9 +1152,9 @@ class Airflow(AirflowViewMixin, BaseView):
         ti = models.TaskInstance(task=task, execution_date=execution_date)
         ti.refresh_from_db()
 
-        # Make sure the task instance can be queued
+        # Make sure the task instance can be run
         dep_context = DepContext(
-            deps=SCHEDULER_QUEUED_DEPS,
+            deps=RUNNING_DEPS,
             ignore_all_deps=ignore_all_deps,
             ignore_task_deps=ignore_task_deps,
             ignore_ti_state=ignore_ti_state)
@@ -1182,7 +1205,7 @@ class Airflow(AirflowViewMixin, BaseView):
         # Upon successful delete return to origin
         return redirect(origin)
 
-    @expose('/trigger', methods=['POST'])
+    @expose('/trigger', methods=['POST', 'GET'])
     @login_required
     @wwwutils.action_logging
     @wwwutils.notify_owner
@@ -1190,6 +1213,15 @@ class Airflow(AirflowViewMixin, BaseView):
     def trigger(self, session=None):
         dag_id = request.values.get('dag_id')
         origin = request.values.get('origin') or "/admin/"
+
+        if request.method == 'GET':
+            return self.render(
+                'airflow/trigger.html',
+                dag_id=dag_id,
+                origin=origin,
+                conf=''
+            )
+
         dag = session.query(models.DagModel).filter(models.DagModel.dag_id == dag_id).first()
         if not dag:
             flash("Cannot find dag {}".format(dag_id))
@@ -1204,7 +1236,20 @@ class Airflow(AirflowViewMixin, BaseView):
             return redirect(origin)
 
         run_conf = {}
+        conf = request.values.get('conf')
+        if conf:
+            try:
+                run_conf = json.loads(conf)
+            except ValueError:
+                flash("Invalid JSON configuration", "error")
+                return self.render(
+                    'airflow/trigger.html',
+                    dag_id=dag_id,
+                    origin=origin,
+                    conf=conf,
+                )
 
+        dag = dagbag.get_dag(dag_id)
         dag.create_dagrun(
             run_id=run_id,
             execution_date=execution_date,
@@ -1220,6 +1265,8 @@ class Airflow(AirflowViewMixin, BaseView):
 
     def _clear_dag_tis(self, dag, start_date, end_date, origin,
                        recursive=False, confirmed=False, only_failed=False):
+        from airflow.exceptions import AirflowException
+
         if confirmed:
             count = dag.clear(
                 start_date=start_date,
@@ -1232,14 +1279,19 @@ class Airflow(AirflowViewMixin, BaseView):
             flash("{0} task instances have been cleared".format(count))
             return redirect(origin)
 
-        tis = dag.clear(
-            start_date=start_date,
-            end_date=end_date,
-            include_subdags=recursive,
-            dry_run=True,
-            include_parentdag=recursive,
-            only_failed=only_failed,
-        )
+        try:
+            tis = dag.clear(
+                start_date=start_date,
+                end_date=end_date,
+                include_subdags=recursive,
+                include_parentdag=recursive,
+                only_failed=only_failed,
+                dry_run=True,
+            )
+        except AirflowException as ex:
+            flash(str(ex), 'error')
+            return redirect(origin)
+
         if not tis:
             flash("No task instances to clear", 'error')
             response = redirect(origin)
@@ -1609,6 +1661,7 @@ class Airflow(AirflowViewMixin, BaseView):
         form = DateTimeWithNumRunsForm(data={'base_date': max_date,
                                              'num_runs': num_runs})
         external_logs = conf.get('elasticsearch', 'frontend')
+        doc_md = wrapped_markdown(getattr(dag, 'doc_md', None), css_class='dag-doc')
         return self.render(
             'airflow/tree.html',
             operators=sorted({op.task_type: op for op in dag.tasks}.values(),
@@ -1616,6 +1669,7 @@ class Airflow(AirflowViewMixin, BaseView):
             root=root,
             form=form,
             dag=dag, data=data, blur=blur, num_runs=num_runs,
+            doc_md=doc_md,
             show_external_logs=bool(external_logs))
 
     @expose('/graph')
@@ -1692,7 +1746,7 @@ class Airflow(AirflowViewMixin, BaseView):
         if not tasks:
             flash("No tasks found", "error")
         session.commit()
-        doc_md = markdown.markdown(dag.doc_md) if hasattr(dag, 'doc_md') and dag.doc_md else ''
+        doc_md = wrapped_markdown(getattr(dag, 'doc_md', None), css_class='dag-doc')
 
         external_logs = conf.get('elasticsearch', 'frontend')
         return self.render(
@@ -1824,8 +1878,8 @@ class Airflow(AirflowViewMixin, BaseView):
             demo_mode=conf.getboolean('webserver', 'demo_mode'),
             root=root,
             form=form,
-            chart=chart.htmlcontent,
-            cum_chart=cum_chart.htmlcontent
+            chart=Markup(chart.htmlcontent),
+            cum_chart=Markup(cum_chart.htmlcontent)
         )
 
     @expose('/tries')
@@ -1891,7 +1945,7 @@ class Airflow(AirflowViewMixin, BaseView):
             demo_mode=conf.getboolean('webserver', 'demo_mode'),
             root=root,
             form=form,
-            chart=chart.htmlcontent
+            chart=Markup(chart.htmlcontent)
         )
 
     @expose('/landing_times')
@@ -1967,7 +2021,7 @@ class Airflow(AirflowViewMixin, BaseView):
         return self.render(
             'airflow/chart.html',
             dag=dag,
-            chart=chart.htmlcontent,
+            chart=Markup(chart.htmlcontent),
             height=str(chart_height + 100) + "px",
             demo_mode=conf.getboolean('webserver', 'demo_mode'),
             root=root,
@@ -2055,12 +2109,13 @@ class Airflow(AirflowViewMixin, BaseView):
         prev_task_id = ""
         for tf in ti_fails:
             end_date = tf.end_date or timezone.utcnow()
+            start_date = tf.start_date or end_date
             if tf_count != 0 and tf.task_id == prev_task_id:
                 try_count = try_count + 1
             else:
                 try_count = 1
             prev_task_id = tf.task_id
-            gantt_bar_items.append((tf.task_id, tf.start_date, end_date, State.FAILED, try_count))
+            gantt_bar_items.append((tf.task_id, start_date, end_date, State.FAILED, try_count))
             tf_count = tf_count + 1
 
         tasks = []
@@ -2263,11 +2318,16 @@ class HomeView(AirflowViewMixin, AdminIndexView):
             auto_complete_data.add(row.dag_id)
             auto_complete_data.add(row.owners)
 
+        state_color_mapping = State.state_color.copy()
+        state_color_mapping["null"] = state_color_mapping.pop(None)
+        state_color_mapping.update(STATE_COLORS)
+
         return self.render(
             'airflow/dags.html',
             dags=dags,
             hide_paused=hide_paused,
             current_page=current_page,
+            state_color=state_color_mapping,
             search_query=arg_search_query if arg_search_query else '',
             page_size=dags_per_page,
             num_of_pages=num_of_pages,
@@ -2346,7 +2406,7 @@ class QueryView(wwwutils.DataProfilingMixin, AirflowViewMixin, BaseView):
         return self.render(
             'airflow/query.html', form=form,
             title="Ad Hoc Query",
-            results=results or '',
+            results=Markup(results or ''),
             has_data=has_data)
 
 
@@ -2694,6 +2754,8 @@ class VariableView(wwwutils.DataProfilingMixin, AirflowModelView):
 
 
 class XComView(wwwutils.SuperUserMixin, AirflowModelView):
+    can_create = False
+    can_edit = False
     verbose_name = "XCom"
     verbose_name_plural = "XComs"
 
@@ -2730,7 +2792,6 @@ class XComView(wwwutils.SuperUserMixin, AirflowModelView):
             try:
                 model.value = json.dumps(model.value).encode('UTF-8')
             except ValueError:
-                log = LoggingMixin().log
                 log.error("Could not serialize the XCOM value into JSON. "
                           "If you are using pickles instead of JSON "
                           "for XCOM, then you need to enable pickle "
@@ -2759,7 +2820,6 @@ class DagRunModelView(ModelViewOnly):
     verbose_name_plural = "DAG Runs"
     can_edit = True
     can_create = True
-    column_editable_list = ('state',)
     verbose_name = "dag run"
     column_default_sort = ('execution_date', True)
     form_choices = {
@@ -3071,6 +3131,11 @@ class ConnectionModelView(wwwutils.SuperUserMixin, AirflowModelView):
         'extra__grpc__auth_type',
         'extra__grpc__credentials_pem_file',
         'extra__grpc__scopes',
+        'extra__yandexcloud__service_account_json',
+        'extra__yandexcloud__service_account_json_path',
+        'extra__yandexcloud__oauth',
+        'extra__yandexcloud__public_ssh_key',
+        'extra__yandexcloud__folder_id',
     )
     verbose_name = "Connection"
     verbose_name_plural = "Connections"
@@ -3106,6 +3171,11 @@ class ConnectionModelView(wwwutils.SuperUserMixin, AirflowModelView):
         'extra__grpc__auth_type': StringField('Grpc Auth Type'),
         'extra__grpc__credentials_pem_file': StringField('Credential Keyfile Path'),
         'extra__grpc__scopes': StringField('Scopes (comma separated)'),
+        'extra__yandexcloud__service_account_json': PasswordField('Service account auth JSON'),
+        'extra__yandexcloud__service_account_json_path': StringField('Service account auth JSON file path'),
+        'extra__yandexcloud__oauth': PasswordField('OAuth Token'),
+        'extra__yandexcloud__public_ssh_key': StringField('Public SSH key'),
+        'extra__yandexcloud__folder_id': StringField('Default folder ID'),
     }
     form_choices = {
         'conn_type': Connection._types
@@ -3113,7 +3183,7 @@ class ConnectionModelView(wwwutils.SuperUserMixin, AirflowModelView):
 
     def on_model_change(self, form, model, is_created):
         formdata = form.data
-        if formdata['conn_type'] in ['jdbc', 'google_cloud_platform', 'gprc']:
+        if formdata['conn_type'] in ['jdbc', 'google_cloud_platform', 'gprc', 'yandexcloud']:
             extra = {
                 key: formdata[key]
                 for key in self.form_extra_fields.keys() if key in formdata}
