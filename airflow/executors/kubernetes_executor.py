@@ -58,7 +58,6 @@ class KubeConfig:
         configuration_dict = conf.as_dict(display_sensitive=True)
         self.core_configuration = configuration_dict['core']
         self.kubernetes_mounts = configuration_dict['kubernetes_secret_mounts']
-        self.kubernetes_configmaps = configuration_dict['kubernetes_configmap_mounts']
         self.kube_secrets = configuration_dict.get('kubernetes_secrets', {})
         self.kube_env_vars = configuration_dict.get('kubernetes_environment_variables', {})
         self.env_from_configmap_ref = conf.get(self.kubernetes_section,

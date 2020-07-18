@@ -17,6 +17,7 @@
 
 import os
 
+from collections import defaultdict
 import kubernetes.client.models as k8s
 import six
 
@@ -335,6 +336,20 @@ class WorkerConfiguration(LoggingMixin):
                     read_only=True
                 )
 
+        if len(self.kube_config.kubernetes_mounts) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_mounts.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                credential_volume_name = f'{prefix}-secret'
+                config_path = mount_dic[prefix]['path']
+                volume_mounts[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'mountPath': config_path,
+                    'readOnly': True
+                }
+
         return list(volume_mounts.values())
 
     def _get_volumes(self):
@@ -413,6 +428,21 @@ class WorkerConfiguration(LoggingMixin):
                         name=self.kube_config.airflow_local_settings_configmap
                     )
                 )
+
+        if len(self.kube_config.kubernetes_mounts) > 0:
+            mount_dic = defaultdict(dict)
+            for key, value in self.kube_config.kubernetes_mounts.items():
+                prefix, suffix = key.split('_')
+                mount_dic[prefix][suffix] = value
+            for prefix in mount_dic:
+                credential_volume_name = f'{prefix}-secret'
+                secret_name = mount_dic[prefix]['secret']
+                volumes[credential_volume_name] = {
+                    'name': credential_volume_name,
+                    'secret': {
+                        'secretName': secret_name
+                    }
+                }
 
         return list(volumes.values())
 
