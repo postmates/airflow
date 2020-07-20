@@ -2,7 +2,7 @@
 #    Docker
 # ----------------
 IMAGE ?= gcr.io/pm-registry/airflow
-TAG ?=  merry2019
+TAG ?=  xmasInJuly
 
 prod-build:
 	docker build -f Dockerfile.pm -t $(IMAGE):$(TAG) .
